@@ -1,149 +1,146 @@
 package com.apex.exchange.engine.service;
 
-import com.apex.exchange.engine.core.OrderBook;
-import com.apex.exchange.engine.kafka.TradeProducer;
 import com.apex.exchange.engine.model.Order;
 import com.apex.exchange.engine.model.OrderSide;
-import com.apex.exchange.engine.model.TradeEvent;
+import com.apex.exchange.engine.model.Trade;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.stereotype.Component;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-@Component
 public class MatchingEngine {
 
-    private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
-    private final Map<String, ReentrantLock> symbolLocks = new ConcurrentHashMap<>();
+    private final PriorityQueue<Order> buyBook;
+    private final PriorityQueue<Order> sellBook;
 
-    private final TradeProducer tradeProducer;
-    private final Counter orderCounter;
-    private final Counter tradeCounter;
-    private final Timer matchingTimer;
+    private final ReentrantLock lock = new ReentrantLock();
 
-    public MatchingEngine(TradeProducer tradeProducer,
-                          MeterRegistry meterRegistry) {
-        this.tradeProducer = tradeProducer;
+    private final Counter ordersProcessed;
+    private final Counter tradesExecuted;
+    private final Timer matchingLatency;
 
-        this.orderCounter = meterRegistry.counter("exchange.orders.processed");
-        this.tradeCounter = meterRegistry.counter("exchange.trades.executed");
-        this.matchingTimer = meterRegistry.timer("exchange.matching.latency");
+    public MatchingEngine(MeterRegistry registry) {
+
+        this.buyBook = new PriorityQueue<>(
+                Comparator.comparingDouble(Order::getPrice).reversed()
+                        .thenComparingLong(Order::getTimestamp)
+        );
+
+        this.sellBook = new PriorityQueue<>(
+                Comparator.comparingDouble(Order::getPrice)
+                        .thenComparingLong(Order::getTimestamp)
+        );
+
+        this.ordersProcessed = registry.counter("exchange.orders.processed");
+        this.tradesExecuted = registry.counter("exchange.trades.executed");
+        this.matchingLatency = registry.timer("exchange.matching.latency");
     }
 
-    public void match(Order order) {
+    public List<Trade> match(Order incomingOrder) {
 
-        String symbol = order.getSymbol();
+        return matchingLatency.record(() -> {
 
-        orderBooks.putIfAbsent(symbol, new OrderBook());
-        symbolLocks.putIfAbsent(symbol, new ReentrantLock());
+            lock.lock();
+            try {
+                ordersProcessed.increment();
+                List<Trade> trades = new ArrayList<>();
 
-        OrderBook book = orderBooks.get(symbol);
-        ReentrantLock lock = symbolLocks.get(symbol);
+                if (incomingOrder.getSide() == OrderSide.BUY) {
+                    matchBuy(incomingOrder, trades);
+                } else {
+                    matchSell(incomingOrder, trades);
+                }
 
-        long startTime = System.nanoTime();
-        lock.lock();
-        try {
+                return trades;
 
-            if (order.getSide() == OrderSide.BUY) {
-                processBuyOrder(order, book);
+            } finally {
+                lock.unlock();
+            }
+        });
+    }
+
+    private void matchBuy(Order buyOrder, List<Trade> trades) {
+
+        while (!sellBook.isEmpty() && buyOrder.getQuantity() > 0) {
+
+            Order bestSell = sellBook.peek();
+
+            if (buyOrder.getPrice() >= bestSell.getPrice()) {
+
+                long tradedQty = Math.min(buyOrder.getQuantity(), bestSell.getQuantity());
+                double tradePrice = bestSell.getPrice();
+
+                buyOrder.reduceQuantity(tradedQty);
+                bestSell.reduceQuantity(tradedQty);
+
+                trades.add(new Trade(
+                        UUID.randomUUID().toString(),
+                        buyOrder.getSymbol(),
+                        tradePrice,
+                        tradedQty,
+                        buyOrder.getOrderId(),
+                        bestSell.getOrderId()
+                ));
+
+                tradesExecuted.increment();
+
+                if (bestSell.getQuantity() == 0) {
+                    sellBook.poll();
+                }
+
             } else {
-                processSellOrder(order, book);
+                break;
             }
-
-            orderCounter.increment();
-
-        } finally {
-            lock.unlock();
-            long duration = System.nanoTime() - startTime;
-            matchingTimer.record(duration, TimeUnit.NANOSECONDS);
-        }
-    }
-
-    private void processBuyOrder(Order buyOrder, OrderBook book) {
-
-        while (!book.getSellBook().isEmpty()
-                && buyOrder.getQuantity() > 0
-                && book.getSellBook().peek().getPrice() <= buyOrder.getPrice()) {
-
-            Order bestSell = book.getSellBook().peek();
-
-            long tradedQty = Math.min(buyOrder.getQuantity(), bestSell.getQuantity());
-            double tradePrice = bestSell.getPrice();
-
-            buyOrder.reduceQuantity(tradedQty);
-            bestSell.reduceQuantity(tradedQty);
-
-            if (bestSell.getQuantity() == 0) {
-                book.getSellBook().poll();
-            }
-
-            publishTrade(
-                    buyOrder.getSymbol(),
-                    buyOrder.getOrderId(),
-                    bestSell.getOrderId(),
-                    tradePrice,
-                    tradedQty
-            );
         }
 
         if (buyOrder.getQuantity() > 0) {
-            book.getBuyBook().add(buyOrder);
+            buyBook.add(buyOrder);
         }
     }
 
-    private void processSellOrder(Order sellOrder, OrderBook book) {
+    private void matchSell(Order sellOrder, List<Trade> trades) {
 
-        while (!book.getBuyBook().isEmpty()
-                && sellOrder.getQuantity() > 0
-                && book.getBuyBook().peek().getPrice() >= sellOrder.getPrice()) {
+        while (!buyBook.isEmpty() && sellOrder.getQuantity() > 0) {
 
-            Order bestBuy = book.getBuyBook().peek();
+            Order bestBuy = buyBook.peek();
 
-            long tradedQty = Math.min(sellOrder.getQuantity(), bestBuy.getQuantity());
-            double tradePrice = bestBuy.getPrice();
+            if (sellOrder.getPrice() <= bestBuy.getPrice()) {
 
-            sellOrder.reduceQuantity(tradedQty);
-            bestBuy.reduceQuantity(tradedQty);
+                long tradedQty = Math.min(sellOrder.getQuantity(), bestBuy.getQuantity());
+                double tradePrice = bestBuy.getPrice();
 
-            if (bestBuy.getQuantity() == 0) {
-                book.getBuyBook().poll();
+                sellOrder.reduceQuantity(tradedQty);
+                bestBuy.reduceQuantity(tradedQty);
+
+                trades.add(new Trade(
+                        UUID.randomUUID().toString(),
+                        sellOrder.getSymbol(),
+                        tradePrice,
+                        tradedQty,
+                        bestBuy.getOrderId(),
+                        sellOrder.getOrderId()
+                ));
+
+                tradesExecuted.increment();
+
+                if (bestBuy.getQuantity() == 0) {
+                    buyBook.poll();
+                }
+
+            } else {
+                break;
             }
-
-            publishTrade(
-                    sellOrder.getSymbol(),
-                    bestBuy.getOrderId(),
-                    sellOrder.getOrderId(),
-                    tradePrice,
-                    tradedQty
-            );
         }
 
         if (sellOrder.getQuantity() > 0) {
-            book.getSellBook().add(sellOrder);
+            sellBook.add(sellOrder);
         }
     }
 
-    private void publishTrade(String symbol,
-                              String buyOrderId,
-                              String sellOrderId,
-                              double price,
-                              long quantity) {
-
-        TradeEvent event = new TradeEvent(
-                symbol,
-                buyOrderId,
-                sellOrderId,
-                price,
-                quantity,
-                System.nanoTime()
-        );
-
-        tradeProducer.publishTrade(event);
-        tradeCounter.increment();
+    public String snapshot() {
+        return "BUY_BOOK=" + buyBook +
+                "\nSELL_BOOK=" + sellBook;
     }
 }

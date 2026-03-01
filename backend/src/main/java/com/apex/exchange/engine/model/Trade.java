@@ -15,6 +15,7 @@ public class Trade {
                  long quantity,
                  String buyOrderId,
                  String sellOrderId) {
+
         this.tradeId = tradeId;
         this.symbol = symbol;
         this.price = price;
@@ -23,10 +24,27 @@ public class Trade {
         this.sellOrderId = sellOrderId;
     }
 
-    public String getTradeId() { return tradeId; }
-    public String getSymbol() { return symbol; }
-    public double getPrice() { return price; }
-    public long getQuantity() { return quantity; }
-    public String getBuyOrderId() { return buyOrderId; }
-    public String getSellOrderId() { return sellOrderId; }
+    public String getTradeId() {
+        return tradeId;
+    }
+
+    public String getSymbol() {
+        return symbol;
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
+    public long getQuantity() {
+        return quantity;
+    }
+
+    public String getBuyOrderId() {
+        return buyOrderId;
+    }
+
+    public String getSellOrderId() {
+        return sellOrderId;
+    }
 }
