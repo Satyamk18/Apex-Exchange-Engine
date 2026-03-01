@@ -1,4 +1,10 @@
+server:
+  port: 8080
+
 spring:
+  application:
+    name: apex-exchange-engine
+
   kafka:
     bootstrap-servers: localhost:9092
 
@@ -13,3 +19,18 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    enable:
+      all: true
+  info:
+    env:
+      enabled: true
