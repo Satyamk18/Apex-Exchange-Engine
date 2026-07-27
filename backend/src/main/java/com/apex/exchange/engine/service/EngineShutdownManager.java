@@ -14,14 +14,6 @@ public class EngineShutdownManager {
 
     @PreDestroy
     public void onShutdown() {
-
-        System.out.println("Shutting down... Snapshotting order books");
-
-        manager.getAllEngines().forEach((symbol, engine) -> {
-            System.out.println("Symbol: " + symbol);
-            System.out.println(engine.snapshot());
-        });
-
-        System.out.println("Snapshot complete.");
+        System.out.println("Gracefully shutting down matching engines...");
     }
 }

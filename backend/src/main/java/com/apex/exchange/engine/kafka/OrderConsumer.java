@@ -9,10 +9,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class OrderConsumer {
 
-    private final MatchingEngineManager engineManager;
+    private final MatchingEngineManager manager;
 
-    public OrderConsumer(MatchingEngineManager engineManager) {
-        this.engineManager = engineManager;
+    public OrderConsumer(MatchingEngineManager manager) {
+        this.manager = manager;
     }
 
     @KafkaListener(topics = "orders")
@@ -27,6 +27,6 @@ public class OrderConsumer {
                 event.getTimestamp()
         );
 
-        engineManager.submitOrder(order);
+        manager.submitOrder(order);
     }
 }
