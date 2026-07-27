@@ -31,11 +31,11 @@ public class OrderBook {
         );
     }
 
-    public PriorityQueue<Order> getBuyBook() {
+    public PriorityQueue<Order> getBuyOrders() {
         return buyBook;
     }
 
-    public PriorityQueue<Order> getSellBook() {
+    public PriorityQueue<Order> getSellOrders() {
         return sellBook;
     }
 }

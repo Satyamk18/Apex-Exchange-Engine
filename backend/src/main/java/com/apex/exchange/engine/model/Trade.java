@@ -8,13 +8,15 @@ public class Trade {
     private final long quantity;
     private final String buyOrderId;
     private final String sellOrderId;
+    private final long timestamp;
 
     public Trade(String tradeId,
                  String symbol,
                  double price,
                  long quantity,
                  String buyOrderId,
-                 String sellOrderId) {
+                 String sellOrderId,
+                 long timestamp) {
 
         this.tradeId = tradeId;
         this.symbol = symbol;
@@ -22,6 +24,7 @@ public class Trade {
         this.quantity = quantity;
         this.buyOrderId = buyOrderId;
         this.sellOrderId = sellOrderId;
+        this.timestamp = timestamp;
     }
 
     public String getTradeId() {
@@ -46,5 +49,9 @@ public class Trade {
 
     public String getSellOrderId() {
         return sellOrderId;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
     }
 }

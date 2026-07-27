@@ -1,71 +1,30 @@
 package com.apex.exchange.engine.service;
 
-import com.apex.exchange.engine.model.Order;
-import com.apex.exchange.engine.model.OrderSide;
-import com.apex.exchange.engine.model.Trade;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
+import com.apex.exchange.engine.core.OrderBook;
+import com.apex.exchange.engine.model.*;
 
-import java.util.*;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 public class MatchingEngine {
 
-    private final PriorityQueue<Order> buyBook;
-    private final PriorityQueue<Order> sellBook;
+    private final OrderBook orderBook = new OrderBook();
 
-    private final ReentrantLock lock = new ReentrantLock();
-
-    private final Counter ordersProcessed;
-    private final Counter tradesExecuted;
-    private final Timer matchingLatency;
-
-    public MatchingEngine(MeterRegistry registry) {
-
-        this.buyBook = new PriorityQueue<>(
-                Comparator.comparingDouble(Order::getPrice).reversed()
-                        .thenComparingLong(Order::getTimestamp)
-        );
-
-        this.sellBook = new PriorityQueue<>(
-                Comparator.comparingDouble(Order::getPrice)
-                        .thenComparingLong(Order::getTimestamp)
-        );
-
-        this.ordersProcessed = registry.counter("exchange.orders.processed");
-        this.tradesExecuted = registry.counter("exchange.trades.executed");
-        this.matchingLatency = registry.timer("exchange.matching.latency");
+    public List<Trade> process(Order order) {
+        if (order.getSide() == OrderSide.BUY) {
+            return matchBuy(order);
+        } else {
+            return matchSell(order);
+        }
     }
 
-    public List<Trade> match(Order incomingOrder) {
+    private List<Trade> matchBuy(Order buyOrder) {
+        List<Trade> trades = new ArrayList<>();
 
-        return matchingLatency.record(() -> {
+        while (!orderBook.getSellOrders().isEmpty() && buyOrder.getQuantity() > 0) {
 
-            lock.lock();
-            try {
-                ordersProcessed.increment();
-                List<Trade> trades = new ArrayList<>();
-
-                if (incomingOrder.getSide() == OrderSide.BUY) {
-                    matchBuy(incomingOrder, trades);
-                } else {
-                    matchSell(incomingOrder, trades);
-                }
-
-                return trades;
-
-            } finally {
-                lock.unlock();
-            }
-        });
-    }
-
-    private void matchBuy(Order buyOrder, List<Trade> trades) {
-
-        while (!sellBook.isEmpty() && buyOrder.getQuantity() > 0) {
-
-            Order bestSell = sellBook.peek();
+            Order bestSell = orderBook.getSellOrders().peek();
 
             if (buyOrder.getPrice() >= bestSell.getPrice()) {
 
@@ -81,30 +40,30 @@ public class MatchingEngine {
                         tradePrice,
                         tradedQty,
                         buyOrder.getOrderId(),
-                        bestSell.getOrderId()
+                        bestSell.getOrderId(),
+                        System.nanoTime()
                 ));
 
-                tradesExecuted.increment();
-
                 if (bestSell.getQuantity() == 0) {
-                    sellBook.poll();
+                    orderBook.getSellOrders().poll();
                 }
 
-            } else {
-                break;
-            }
+            } else break;
         }
 
         if (buyOrder.getQuantity() > 0) {
-            buyBook.add(buyOrder);
+            orderBook.getBuyOrders().offer(buyOrder);
         }
+
+        return trades;
     }
 
-    private void matchSell(Order sellOrder, List<Trade> trades) {
+    private List<Trade> matchSell(Order sellOrder) {
+        List<Trade> trades = new ArrayList<>();
 
-        while (!buyBook.isEmpty() && sellOrder.getQuantity() > 0) {
+        while (!orderBook.getBuyOrders().isEmpty() && sellOrder.getQuantity() > 0) {
 
-            Order bestBuy = buyBook.peek();
+            Order bestBuy = orderBook.getBuyOrders().peek();
 
             if (sellOrder.getPrice() <= bestBuy.getPrice()) {
 
@@ -120,27 +79,21 @@ public class MatchingEngine {
                         tradePrice,
                         tradedQty,
                         bestBuy.getOrderId(),
-                        sellOrder.getOrderId()
+                        sellOrder.getOrderId(),
+                        System.nanoTime()
                 ));
 
-                tradesExecuted.increment();
-
                 if (bestBuy.getQuantity() == 0) {
-                    buyBook.poll();
+                    orderBook.getBuyOrders().poll();
                 }
 
-            } else {
-                break;
-            }
+            } else break;
         }
 
         if (sellOrder.getQuantity() > 0) {
-            sellBook.add(sellOrder);
+            orderBook.getSellOrders().offer(sellOrder);
         }
-    }
 
-    public String snapshot() {
-        return "BUY_BOOK=" + buyBook +
-                "\nSELL_BOOK=" + sellBook;
+        return trades;
     }
 }
