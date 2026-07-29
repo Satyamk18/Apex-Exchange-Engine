@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class TradeConsumer {
 
-    @KafkaListener(topics = "trades", groupId = "trade-listener-group")
+    @KafkaListener(topics = "${exchange.kafka.trades.name}", groupId = "trade-listener-group")
     public void consume(TradeEvent event) {
         System.out.println("Trade Event Received -> "
                 + event.getTradeId()

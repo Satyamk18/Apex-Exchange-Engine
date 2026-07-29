@@ -15,7 +15,7 @@ public class OrderConsumer {
         this.manager = manager;
     }
 
-    @KafkaListener(topics = "orders")
+    @KafkaListener(topics = "${exchange.kafka.orders.name}")
     public void consume(OrderEvent event) {
 
         Order order = new Order(

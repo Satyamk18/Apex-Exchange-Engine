@@ -10,9 +10,12 @@ import org.springframework.stereotype.Service;
 public class TradeProducer implements TradePublisher {
 
     private final KafkaTemplate<String, TradeEvent> kafkaTemplate;
+    private final KafkaTopicProperties topicProperties;
 
-    public TradeProducer(KafkaTemplate<String, TradeEvent> kafkaTemplate) {
+    public TradeProducer(KafkaTemplate<String, TradeEvent> kafkaTemplate,
+                         KafkaTopicProperties topicProperties) {
         this.kafkaTemplate = kafkaTemplate;
+        this.topicProperties = topicProperties;
     }
 
     @Override
@@ -29,6 +32,6 @@ public class TradeProducer implements TradePublisher {
     }
 
     public void publishTrade(TradeEvent event) {
-        kafkaTemplate.send("trades", event.getSymbol(), event);
+        kafkaTemplate.send(topicProperties.getTrades().getName(), event.getSymbol(), event);
     }
 }

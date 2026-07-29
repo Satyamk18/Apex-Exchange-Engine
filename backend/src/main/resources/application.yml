@@ -20,6 +20,17 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
 
+exchange:
+  kafka:
+    orders:
+      name: orders
+      partitions: 12
+      replication-factor: 1
+    trades:
+      name: trades
+      partitions: 12
+      replication-factor: 1
+
 management:
   endpoints:
     web:

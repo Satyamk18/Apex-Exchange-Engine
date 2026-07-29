@@ -16,7 +16,9 @@ class TradeProducerTest {
     @Test
     void publishesTradeEventToTradesTopic() {
         KafkaTemplate<String, TradeEvent> kafkaTemplate = mock(KafkaTemplate.class);
-        TradeProducer producer = new TradeProducer(kafkaTemplate);
+        KafkaTopicProperties topicProperties = new KafkaTopicProperties();
+        topicProperties.getTrades().setName("trades");
+        TradeProducer producer = new TradeProducer(kafkaTemplate, topicProperties);
         Trade trade = new Trade("trade-1", "AAPL", 101.50, 25, "buy-1", "sell-1", 123456789L);
 
         producer.publish(trade);
