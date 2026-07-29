@@ -10,11 +10,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MatchingEngineManager {
 
     private final ConcurrentHashMap<String, SymbolEngine> engines = new ConcurrentHashMap<>();
+    private final TradePublisher tradePublisher;
+
+    public MatchingEngineManager(TradePublisher tradePublisher) {
+        this.tradePublisher = tradePublisher;
+    }
 
     public void submitOrder(Order order) {
         engines
                 .computeIfAbsent(order.getSymbol(), symbol ->
-                        new SymbolEngine(symbol, new MatchingEngine())
+                        new SymbolEngine(symbol, new MatchingEngine(), tradePublisher)
                 )
                 .submit(order);
     }

@@ -9,7 +9,9 @@ public class TradeConsumer {
 
     @KafkaListener(topics = "trades", groupId = "trade-listener-group")
     public void consume(TradeEvent event) {
-        System.out.println("Trade Event Received → "
+        System.out.println("Trade Event Received -> "
+                + event.getTradeId()
+                + " | "
                 + event.getSymbol()
                 + " | Qty: " + event.getQuantity()
                 + " | Price: " + event.getPrice());

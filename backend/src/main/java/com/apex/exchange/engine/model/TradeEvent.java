@@ -2,6 +2,7 @@ package com.apex.exchange.engine.model;
 
 public class TradeEvent {
 
+    private String tradeId;
     private String symbol;
     private String buyOrderId;
     private String sellOrderId;
@@ -11,12 +12,14 @@ public class TradeEvent {
 
     public TradeEvent() {}
 
-    public TradeEvent(String symbol,
+    public TradeEvent(String tradeId,
+                      String symbol,
                       String buyOrderId,
                       String sellOrderId,
                       double price,
                       long quantity,
                       long timestamp) {
+        this.tradeId = tradeId;
         this.symbol = symbol;
         this.buyOrderId = buyOrderId;
         this.sellOrderId = sellOrderId;
@@ -25,6 +28,7 @@ public class TradeEvent {
         this.timestamp = timestamp;
     }
 
+    public String getTradeId() { return tradeId; }
     public String getSymbol() { return symbol; }
     public String getBuyOrderId() { return buyOrderId; }
     public String getSellOrderId() { return sellOrderId; }
@@ -32,6 +36,7 @@ public class TradeEvent {
     public long getQuantity() { return quantity; }
     public long getTimestamp() { return timestamp; }
 
+    public void setTradeId(String tradeId) { this.tradeId = tradeId; }
     public void setSymbol(String symbol) { this.symbol = symbol; }
     public void setBuyOrderId(String buyOrderId) { this.buyOrderId = buyOrderId; }
     public void setSellOrderId(String sellOrderId) { this.sellOrderId = sellOrderId; }
