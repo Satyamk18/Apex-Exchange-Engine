@@ -4,6 +4,7 @@ import com.apex.exchange.engine.model.Order;
 import com.apex.exchange.engine.model.OrderSide;
 import com.apex.exchange.engine.service.MatchingEngineManager;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ExecutorService;
@@ -11,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@Profile("load-test")
 public class LoadTestRunner implements CommandLineRunner {
 
     private final MatchingEngineManager manager;
