@@ -1,116 +1,93 @@
+# PROJECT_CONTEXT.md
+
 # Apex Exchange Engine
 
-## Overview
+## Project Vision
 
-Apex Exchange Engine is a production-inspired, low latency, high throughput stock exchange matching engine built in Java.
+Apex Exchange Engine is a production-inspired low-latency stock exchange matching engine built to simulate how modern electronic trading systems operate.
 
-The goal of this project is NOT to build another CRUD application. Instead, the focus is on learning and demonstrating the backend engineering concepts used inside modern exchanges such as NASDAQ, NYSE, Zerodha, Binance and other high-performance trading systems.
+The objective is not merely to build a working application, but to design and implement a system that demonstrates production-grade backend engineering principles including scalability, concurrency, maintainability, and clean architecture.
 
-The project emphasizes:
+Every architectural decision should prioritize long-term maintainability, correctness, and performance over short-term implementation convenience.
 
-- Low latency
-- High throughput
-- Concurrent processing
-- Event-driven architecture
-- Lock minimization
-- Horizontal scalability
-- Clean software architecture
-- Production-grade engineering practices
+---
 
-This repository is being developed incrementally with each phase building toward a realistic distributed exchange architecture.
+# Goals
+
+The project aims to:
+
+- Build a deterministic order matching engine
+- Handle concurrent order ingestion safely
+- Process trades with low latency
+- Demonstrate event-driven architecture
+- Scale horizontally by symbol
+- Showcase production-quality engineering practices
+- Serve as a portfolio project that reflects real-world backend system design
+
+---
+
+# Non Goals
+
+This project intentionally does not aim to replicate an entire stock exchange.
+
+The following are currently out of scope:
+
+- Market data dissemination
+- FIX protocol
+- Authentication and authorization
+- User management
+- Risk management
+- Regulatory compliance
+- Trading UI
+
+These may be explored in future iterations.
 
 ---
 
 # Current Tech Stack
 
-Backend
-
+Language
 - Java 17
+
+Backend
 - Spring Boot
-- Maven
+
+Messaging
 - Apache Kafka
-- Spring Kafka
-- Micrometer
-- Spring Boot Actuator
+
+Build Tool
+- Maven
+
+Infrastructure
 - Docker Compose
 
-Java Concurrency
-
-- ConcurrentHashMap
-- BlockingQueue
-- Dedicated worker threads
-- Producer / Consumer pattern
-
-Future Technologies
-
-- Redis
-- WebSockets
-- Prometheus
-- Grafana
-- Kubernetes
-- Cassandra / Event Store (optional)
-- Docker Swarm / Kubernetes
+Monitoring
+- Spring Actuator
+- Micrometer
 
 ---
 
-# Current Project Status
+# Current Architecture
 
-Implemented
+Current request flow:
 
-- REST Order API
-- Kafka Producer
-- Kafka Consumer
-- In-memory Matching Engine
-- OrderBook
-- Price-Time Priority Matching
-- Buy/Sell Order Matching
-- Trade Generation
-- Per-Symbol Matching Engine
-- Symbol-level concurrency
-- One processing thread per trading symbol
-- Load Test Runner
-- Micrometer metrics
-- Spring Actuator metrics
-- Graceful shutdown framework
-
-Not Yet Implemented
-
-- Trade streaming
-- WebSockets
-- Order cancellation
-- Order modification
-- Market orders
-- IOC/FOK orders
-- Persistence
-- Snapshot recovery
-- Horizontal scaling
-- Kafka partition strategy
-- Docker deployment
-- Monitoring dashboards
-
----
-
-# High Level Architecture
-
-Current Request Flow
-
-HTTP Request
+Client
 
 ↓
 
-OrderController
+REST Controller
 
 ↓
 
-OrderProducer
+Kafka Producer
 
 ↓
 
-Kafka Topic (orders)
+Kafka Topic
 
 ↓
 
-OrderConsumer
+Kafka Consumer
 
 ↓
 
@@ -126,25 +103,13 @@ MatchingEngine
 
 ↓
 
-Trade(s)
+Trade Event
 
 ↓
 
-TradeProducer
+Kafka Trade Topic
 
-↓
-
-Kafka Topic (trades)
-
-Future
-
-↓
-
-WebSocket Gateway
-
-↓
-
-Frontend
+The architecture is intentionally event-driven to separate request handling from business processing.
 
 ---
 
@@ -152,407 +117,265 @@ Frontend
 
 ## OrderController
 
-Responsibilities
+Receives client requests.
 
-- Accept incoming REST requests
-- Validate request
-- Publish order to Kafka
+Responsible only for validation and publishing orders.
 
-Contains NO business logic.
+Contains no business logic.
 
 ---
 
 ## OrderProducer
 
-Responsibilities
-
-- Publish OrderEvent to Kafka
-
-Acts as the entry point into the asynchronous pipeline.
+Publishes validated orders to Kafka.
 
 ---
 
 ## OrderConsumer
 
-Responsibilities
+Consumes orders from Kafka.
 
-- Consume OrderEvent
-- Convert OrderEvent → Order
-- Submit order to MatchingEngineManager
+Routes each order to the appropriate SymbolEngine.
 
 ---
 
 ## MatchingEngineManager
 
-Responsibilities
+Maintains a registry of SymbolEngines.
 
-Maintain one SymbolEngine instance per trading symbol.
-
-Example
-
-AAPL → SymbolEngine
-
-GOOG → SymbolEngine
-
-MSFT → SymbolEngine
-
-Uses ConcurrentHashMap<String, SymbolEngine>.
-
-Creates SymbolEngine lazily using computeIfAbsent().
-
-Guarantees:
-
-One SymbolEngine per symbol.
+Ensures one matching engine exists per trading symbol.
 
 ---
 
 ## SymbolEngine
 
-Represents one trading symbol.
+Owns:
 
-Owns
-
-- Symbol name
 - MatchingEngine
-- BlockingQueue<Order>
+- BlockingQueue
 - Dedicated processing thread
 
-Responsibilities
-
-Receive orders.
-
-Queue them.
-
-Process them sequentially.
-
-Guarantees
-
-Orders for one symbol are always executed in order.
-
-No locking required inside MatchingEngine.
+Guarantees sequential processing for a single symbol while allowing parallel processing across multiple symbols.
 
 ---
 
 ## MatchingEngine
 
-Contains ALL business logic.
+Contains all order matching logic.
 
-Responsibilities
+Responsible for:
 
-- Match Buy orders
-- Match Sell orders
-- Generate Trade objects
-- Maintain Price-Time Priority
+- Buy book
+- Sell book
+- Price-time priority
+- Trade generation
 
-Contains NO Spring Boot code.
-
-Contains NO Kafka code.
-
-Contains NO HTTP code.
-
-Pure business logic.
+Should remain independent of Spring Boot and Kafka.
 
 ---
 
-## OrderBook
+# Current Concurrency Model
 
-Maintains
+Concurrency is partitioned by trading symbol.
 
-Buy Orders
+Each symbol owns:
 
-Max Heap
+- Dedicated worker thread
+- Dedicated queue
+- Dedicated matching engine
 
-Highest price first
+This eliminates synchronization inside the matching engine while allowing multiple symbols to execute simultaneously.
 
-FIFO for same price
-
-Sell Orders
-
-Min Heap
-
-Lowest price first
-
-FIFO for same price
-
-Supports O(log n) insertion/removal.
+Future improvements may include more advanced scheduling or partition assignment strategies.
 
 ---
 
-## TradeProducer
+# Architectural Principles
 
-Publishes executed trades to Kafka.
+The project follows these architectural principles:
 
-(Current implementation may still be under development.)
+- Separation of Concerns
+- Single Responsibility Principle
+- Composition over Inheritance
+- Dependency Injection
+- Framework-independent business logic
+- High cohesion
+- Low coupling
 
----
-
-## TradeConsumer
-
-Consumes Trade events.
-
-(Current implementation may still be under development.)
-
----
-
-## LoadTestRunner
-
-Generates synthetic traffic.
-
-Purpose
-
-- Stress test engine
-- Measure throughput
-- Generate thousands of orders automatically
-
-Not intended for production.
+The domain model should never depend directly on infrastructure concerns.
 
 ---
 
-## EngineShutdownManager
+# Engineering Expectations
 
-Handles graceful application shutdown.
+Every implementation should optimize for:
 
-Future responsibility
-
-Persist snapshots before application exits.
-
----
-
-# Architectural Decisions
-
-## Why Kafka?
-
-Kafka decouples order submission from order processing.
-
-Benefits
-
-- Asynchronous processing
-- High throughput
-- Backpressure
+- Correctness
+- Readability
+- Maintainability
+- Testability
+- Reliability
 - Scalability
-- Replay capability
+- Performance
+- Extensibility
+
+Working code is not sufficient.
+
+Solutions should be evaluated from an engineering perspective.
 
 ---
 
-## Why One Thread Per Symbol?
+# Performance Philosophy
 
-Orders for the same symbol MUST execute sequentially.
+Performance should be achieved through good design rather than premature optimization.
 
-Instead of locking
+When multiple implementations exist, prefer solutions that:
 
-Many threads
+- Reduce unnecessary allocations
+- Minimize lock contention
+- Reduce algorithmic complexity
+- Improve throughput
+- Maintain deterministic behavior
 
-↓
-
-One OrderBook
-
-↓
-
-Synchronization
-
-↓
-
-Contention
-
-we use
-
-One Symbol
-
-↓
-
-One Queue
-
-↓
-
-One Thread
-
-↓
-
-No contention
-
-Different symbols execute in parallel.
-
-This provides symbol-level concurrency.
+Every optimization should preserve readability and correctness.
 
 ---
 
-## Why No Database?
+# Concurrency Philosophy
 
-Database writes introduce latency.
+Concurrency should remain explicit and easy to reason about.
 
-Matching engines must operate completely in memory.
+Prefer:
 
-Persistence will be added later using
+- Message passing
+- Immutable objects where practical
+- Dedicated ownership of mutable state
 
-- Snapshots
-- Event replay
-- Kafka log
+Avoid:
 
-This mirrors real exchange architecture.
+- Shared mutable state
+- Global synchronization
+- Hidden concurrency
 
----
-
-## Why MatchingEngine is NOT a Spring Bean
-
-Business logic should remain framework-independent.
-
-MatchingEngine can therefore
-
-- be unit tested
-- be benchmarked
-- be reused
-
-without Spring Boot.
+Thread safety should be maintained by design rather than by excessive locking.
 
 ---
 
-# Performance Goals
+# Engineering Mindset
 
-Target Throughput
+Think like a backend engineer building software that may eventually process millions of events.
 
-100,000+ Orders / second
+Every design decision should consider:
 
-Target Latency
+- Can this scale?
 
-P99 < 1 ms
+- Is this maintainable?
 
-Characteristics
+- Can another engineer understand this?
 
-- Lock-free matching path
-- One thread per symbol
-- O(log n) order insertion
-- Event-driven architecture
-- High cache locality
+- What happens during failure?
 
----
+- Can this component evolve independently?
 
-# Development Principles
-
-Whenever modifying this project:
-
-DO
-
-- Keep business logic inside MatchingEngine.
-- Preserve symbol-level concurrency.
-- Keep MatchingEngine independent of Spring.
-- Prefer immutable models.
-- Explain architectural changes.
-- Keep methods small.
-- Preserve thread safety.
-- Ensure project builds successfully after every change.
-
-DO NOT
-
-- Convert project into CRUD architecture.
-- Add unnecessary database calls.
-- Introduce global locks.
-- Mix transport logic with business logic.
-- Break existing architecture without explanation.
+Trade-offs should always be explained before implementation.
 
 ---
 
-# AI Assistant Guidelines
+# AI Collaboration Guidelines
 
-Before making code changes:
+Before implementing any feature:
 
-1. Inspect the current implementation.
-2. Do NOT assume constructor signatures.
-3. Update all dependent classes together.
-4. Explain why every change is required.
-5. Ensure Maven build succeeds.
-6. Preserve existing functionality.
-7. Follow the architecture defined in this document.
+1. Understand the current architecture.
+
+2. Explain the proposed design.
+
+3. Identify affected components.
+
+4. Explain trade-offs.
+
+5. Preserve architectural consistency.
+
+After implementation:
+
+- Review the code.
+- Check thread safety.
+- Look for performance improvements.
+- Identify edge cases.
+- Suggest possible refactorings.
+
+Do not introduce unnecessary abstractions.
+
+Do not over-engineer.
+
+Prefer incremental improvements over large rewrites.
 
 ---
 
-# Long Term Roadmap
+# Code Review Checklist
+
+Every completed feature should satisfy the following:
+
+✓ Correctness
+
+✓ Readability
+
+✓ Maintainability
+
+✓ Thread Safety
+
+✓ Performance
+
+✓ No duplicate logic
+
+✓ Appropriate abstractions
+
+✓ Meaningful naming
+
+✓ Error handling
+
+✓ Logging where appropriate
+
+✓ Build passes
+
+---
+
+# Current Roadmap
 
 Phase 1
-
-✓ Matching Engine
+- Order matching
+- Buy/Sell books
+- Market orders
+- Limit orders
 
 Phase 2
-
-✓ Kafka Integration
+- Kafka integration
+- Symbol partitioning
+- Concurrent processing
 
 Phase 3
-
-✓ Per Symbol Matching Engine
+- Trade publishing
+- Trade history
+- Order cancellation
 
 Phase 4
-
-✓ Symbol-Level Concurrency
+- Snapshots
+- Recovery
+- Persistence
 
 Phase 5
-
-⬜ Trade Streaming
+- WebSocket streaming
+- Market data
+- Horizontal scaling
 
 Phase 6
-
-⬜ WebSocket Market Data
-
-Phase 7
-
-⬜ Snapshot & Recovery
-
-Phase 8
-
-⬜ Horizontal Scaling
-
-Phase 9
-
-⬜ Distributed Exchange Deployment
+- Distributed deployment
+- Performance benchmarking
+- Production hardening
 
 ---
 
-# Repository Structure
+# Future Vision
 
-backend/
+The long-term objective is to evolve Apex Exchange Engine into a production-inspired distributed trading platform that demonstrates modern backend engineering practices, distributed systems design, and low-latency architecture.
 
-src/
-
-controller/
-
-REST APIs
-
-kafka/
-
-Kafka Producers & Consumers
-
-core/
-
-OrderBook
-
-model/
-
-Entities & Events
-
-service/
-
-Business logic
-
-load/
-
-Benchmarking utilities
-
-resources/
-
-application.yml
-
----
-
-# Project Vision
-
-The final system should resemble a simplified production stock exchange capable of handling large order volumes with low latency while demonstrating modern backend engineering practices including:
-
-- Concurrent programming
-- Event-driven architecture
-- Kafka
-- WebSockets
-- Horizontal scalability
-- Snapshot recovery
-- Monitoring
-- Containerization
-- Distributed systems
-
-The project is intended to serve as a flagship backend engineering portfolio project for software engineering interviews at top product companies.
+The project should emphasize engineering quality over feature quantity and remain a reference implementation for scalable event-driven backend systems.
