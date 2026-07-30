@@ -2,6 +2,7 @@ package com.apex.exchange.load;
 
 import com.apex.exchange.engine.model.Order;
 import com.apex.exchange.engine.model.OrderSide;
+import com.apex.exchange.engine.model.OrderType;
 import com.apex.exchange.engine.service.MatchingEngineManager;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
@@ -39,6 +40,7 @@ public class LoadTestRunner implements CommandLineRunner {
                             "id-" + Thread.currentThread().getId() + "-" + i,
                             "AAPL",
                             i % 2 == 0 ? OrderSide.BUY : OrderSide.SELL,
+                            OrderType.LIMIT,
                             100,
                             10,
                             System.nanoTime()

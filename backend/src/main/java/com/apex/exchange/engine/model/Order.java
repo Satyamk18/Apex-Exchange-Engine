@@ -5,6 +5,7 @@ public class Order {
     private final String orderId;
     private final String symbol;
     private final OrderSide side;
+    private final OrderType type;
     private final double price;
     private long quantity;
     private final long timestamp;
@@ -12,15 +13,26 @@ public class Order {
     public Order(String orderId,
                  String symbol,
                  OrderSide side,
+                 OrderType type,
                  double price,
                  long quantity,
                  long timestamp) {
         this.orderId = orderId;
         this.symbol = symbol;
         this.side = side;
+        this.type = type != null ? type : OrderType.LIMIT;
         this.price = price;
         this.quantity = quantity;
         this.timestamp = timestamp;
+    }
+
+    public Order(String orderId,
+                 String symbol,
+                 OrderSide side,
+                 double price,
+                 long quantity,
+                 long timestamp) {
+        this(orderId, symbol, side, OrderType.LIMIT, price, quantity, timestamp);
     }
 
     public void reduceQuantity(long qty) {
@@ -30,6 +42,7 @@ public class Order {
     public String getOrderId() { return orderId; }
     public String getSymbol() { return symbol; }
     public OrderSide getSide() { return side; }
+    public OrderType getType() { return type; }
     public double getPrice() { return price; }
     public long getQuantity() { return quantity; }
     public long getTimestamp() { return timestamp; }

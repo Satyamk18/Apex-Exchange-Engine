@@ -22,6 +22,7 @@ public class OrderConsumer {
                 event.getOrderId(),
                 event.getSymbol(),
                 event.getSide(),
+                event.getType(),
                 event.getPrice(),
                 event.getQuantity(),
                 event.getTimestamp()

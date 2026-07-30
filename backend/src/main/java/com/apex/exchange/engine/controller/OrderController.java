@@ -3,6 +3,8 @@ package com.apex.exchange.engine.controller;
 import com.apex.exchange.engine.kafka.OrderProducer;
 import com.apex.exchange.engine.model.OrderEvent;
 import com.apex.exchange.engine.model.OrderRequest;
+import com.apex.exchange.engine.model.OrderType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,12 +18,19 @@ public class OrderController {
     }
 
     @PostMapping
-    public String placeOrder(@RequestBody OrderRequest request) {
+    public ResponseEntity<String> placeOrder(@RequestBody OrderRequest request) {
+
+        OrderType type = request.getType() != null ? request.getType() : OrderType.LIMIT;
+
+        if (type == OrderType.LIMIT && request.getPrice() <= 0) {
+            return ResponseEntity.badRequest().body("Limit orders must specify a price greater than 0");
+        }
 
         OrderEvent event = new OrderEvent(
                 request.getOrderId(),
                 request.getSymbol(),
                 request.getSide(),
+                type,
                 request.getPrice(),
                 request.getQuantity(),
                 System.nanoTime()
@@ -29,6 +38,6 @@ public class OrderController {
 
         orderProducer.publishOrder(event);
 
-        return "Order published to Kafka";
+        return ResponseEntity.ok("Order published to Kafka");
     }
 }

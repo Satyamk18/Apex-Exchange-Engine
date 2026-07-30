@@ -26,7 +26,10 @@ public class MatchingEngine {
 
             Order bestSell = orderBook.getSellOrders().peek();
 
-            if (buyOrder.getPrice() >= bestSell.getPrice()) {
+            boolean canMatch = (buyOrder.getType() == OrderType.MARKET)
+                    || (buyOrder.getPrice() >= bestSell.getPrice());
+
+            if (canMatch) {
 
                 long tradedQty = Math.min(buyOrder.getQuantity(), bestSell.getQuantity());
                 double tradePrice = bestSell.getPrice();
@@ -48,10 +51,12 @@ public class MatchingEngine {
                     orderBook.getSellOrders().poll();
                 }
 
-            } else break;
+            } else {
+                break;
+            }
         }
 
-        if (buyOrder.getQuantity() > 0) {
+        if (buyOrder.getQuantity() > 0 && buyOrder.getType() == OrderType.LIMIT) {
             orderBook.getBuyOrders().offer(buyOrder);
         }
 
@@ -65,7 +70,10 @@ public class MatchingEngine {
 
             Order bestBuy = orderBook.getBuyOrders().peek();
 
-            if (sellOrder.getPrice() <= bestBuy.getPrice()) {
+            boolean canMatch = (sellOrder.getType() == OrderType.MARKET)
+                    || (sellOrder.getPrice() <= bestBuy.getPrice());
+
+            if (canMatch) {
 
                 long tradedQty = Math.min(sellOrder.getQuantity(), bestBuy.getQuantity());
                 double tradePrice = bestBuy.getPrice();
@@ -87,13 +95,19 @@ public class MatchingEngine {
                     orderBook.getBuyOrders().poll();
                 }
 
-            } else break;
+            } else {
+                break;
+            }
         }
 
-        if (sellOrder.getQuantity() > 0) {
+        if (sellOrder.getQuantity() > 0 && sellOrder.getType() == OrderType.LIMIT) {
             orderBook.getSellOrders().offer(sellOrder);
         }
 
         return trades;
+    }
+
+    public OrderBook getOrderBook() {
+        return orderBook;
     }
 }

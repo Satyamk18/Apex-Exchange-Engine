@@ -5,6 +5,7 @@ public class OrderRequest {
     private String orderId;
     private String symbol;
     private OrderSide side;
+    private OrderType type = OrderType.LIMIT;
     private double price;
     private long quantity;
 
@@ -16,6 +17,9 @@ public class OrderRequest {
 
     public OrderSide getSide() { return side; }
     public void setSide(OrderSide side) { this.side = side; }
+
+    public OrderType getType() { return type; }
+    public void setType(OrderType type) { this.type = type; }
 
     public double getPrice() { return price; }
     public void setPrice(double price) { this.price = price; }
