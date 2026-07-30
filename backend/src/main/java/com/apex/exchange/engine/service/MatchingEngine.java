@@ -12,14 +12,33 @@ public class MatchingEngine {
     private final OrderBook orderBook = new OrderBook();
 
     public List<Trade> process(Order order) {
-        if (order.getSide() == OrderSide.BUY) {
-            return matchBuy(order);
-        } else {
-            return matchSell(order);
-        }
+        return process(order, null);
     }
 
-    private List<Trade> matchBuy(Order buyOrder) {
+    public List<Trade> process(Order order, OrderStatusTracker tracker) {
+        if (tracker != null) {
+            tracker.registerOrder(order);
+        }
+
+        List<Trade> trades;
+        if (order.getSide() == OrderSide.BUY) {
+            trades = matchBuy(order, tracker);
+        } else {
+            trades = matchSell(order, tracker);
+        }
+
+        return trades;
+    }
+
+    public boolean cancelOrder(String orderId, OrderStatusTracker tracker) {
+        boolean cancelled = orderBook.cancelOrder(orderId);
+        if (cancelled && tracker != null) {
+            tracker.markCancelled(orderId);
+        }
+        return cancelled;
+    }
+
+    private List<Trade> matchBuy(Order buyOrder, OrderStatusTracker tracker) {
         List<Trade> trades = new ArrayList<>();
 
         while (!orderBook.getSellOrders().isEmpty() && buyOrder.getQuantity() > 0) {
@@ -37,6 +56,11 @@ public class MatchingEngine {
                 buyOrder.reduceQuantity(tradedQty);
                 bestSell.reduceQuantity(tradedQty);
 
+                if (tracker != null) {
+                    tracker.updateOrder(buyOrder);
+                    tracker.updateOrder(bestSell);
+                }
+
                 trades.add(new Trade(
                         UUID.randomUUID().toString(),
                         buyOrder.getSymbol(),
@@ -49,6 +73,7 @@ public class MatchingEngine {
 
                 if (bestSell.getQuantity() == 0) {
                     orderBook.getSellOrders().poll();
+                    orderBook.removeActiveOrder(bestSell.getOrderId());
                 }
 
             } else {
@@ -57,13 +82,20 @@ public class MatchingEngine {
         }
 
         if (buyOrder.getQuantity() > 0 && buyOrder.getType() == OrderType.LIMIT) {
-            orderBook.getBuyOrders().offer(buyOrder);
+            orderBook.addBuyOrder(buyOrder);
+            if (tracker != null) {
+                tracker.updateOrder(buyOrder);
+            }
+        } else if (buyOrder.getType() == OrderType.MARKET && buyOrder.getQuantity() > 0) {
+            if (tracker != null) {
+                tracker.updateOrder(buyOrder);
+            }
         }
 
         return trades;
     }
 
-    private List<Trade> matchSell(Order sellOrder) {
+    private List<Trade> matchSell(Order sellOrder, OrderStatusTracker tracker) {
         List<Trade> trades = new ArrayList<>();
 
         while (!orderBook.getBuyOrders().isEmpty() && sellOrder.getQuantity() > 0) {
@@ -81,6 +113,11 @@ public class MatchingEngine {
                 sellOrder.reduceQuantity(tradedQty);
                 bestBuy.reduceQuantity(tradedQty);
 
+                if (tracker != null) {
+                    tracker.updateOrder(sellOrder);
+                    tracker.updateOrder(bestBuy);
+                }
+
                 trades.add(new Trade(
                         UUID.randomUUID().toString(),
                         sellOrder.getSymbol(),
@@ -93,6 +130,7 @@ public class MatchingEngine {
 
                 if (bestBuy.getQuantity() == 0) {
                     orderBook.getBuyOrders().poll();
+                    orderBook.removeActiveOrder(bestBuy.getOrderId());
                 }
 
             } else {
@@ -101,7 +139,14 @@ public class MatchingEngine {
         }
 
         if (sellOrder.getQuantity() > 0 && sellOrder.getType() == OrderType.LIMIT) {
-            orderBook.getSellOrders().offer(sellOrder);
+            orderBook.addSellOrder(sellOrder);
+            if (tracker != null) {
+                tracker.updateOrder(sellOrder);
+            }
+        } else if (sellOrder.getType() == OrderType.MARKET && sellOrder.getQuantity() > 0) {
+            if (tracker != null) {
+                tracker.updateOrder(sellOrder);
+            }
         }
 
         return trades;

@@ -1,6 +1,5 @@
 package com.apex.exchange.engine.kafka;
 
-import com.apex.exchange.engine.model.Order;
 import com.apex.exchange.engine.model.OrderEvent;
 import com.apex.exchange.engine.service.MatchingEngineManager;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -17,17 +16,6 @@ public class OrderConsumer {
 
     @KafkaListener(topics = "${exchange.kafka.orders.name}")
     public void consume(OrderEvent event) {
-
-        Order order = new Order(
-                event.getOrderId(),
-                event.getSymbol(),
-                event.getSide(),
-                event.getType(),
-                event.getPrice(),
-                event.getQuantity(),
-                event.getTimestamp()
-        );
-
-        manager.submitOrder(order);
+        manager.processEvent(event);
     }
 }

@@ -1,7 +1,6 @@
 package com.apex.exchange.engine.service;
 
-import com.apex.exchange.engine.model.Order;
-import com.apex.exchange.engine.model.Trade;
+import com.apex.exchange.engine.model.*;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -12,28 +11,51 @@ public class SymbolEngine {
     private final String symbol;
     private final MatchingEngine matchingEngine;
     private final TradePublisher tradePublisher;
-    private final BlockingQueue<Order> queue;
+    private final OrderStatusTracker orderStatusTracker;
+    private final BlockingQueue<OrderEvent> queue;
 
-    public SymbolEngine(String symbol, MatchingEngine matchingEngine, TradePublisher tradePublisher) {
+    public SymbolEngine(String symbol,
+                        MatchingEngine matchingEngine,
+                        TradePublisher tradePublisher,
+                        OrderStatusTracker orderStatusTracker) {
         this.symbol = symbol;
         this.matchingEngine = matchingEngine;
         this.tradePublisher = tradePublisher;
+        this.orderStatusTracker = orderStatusTracker;
         this.queue = new LinkedBlockingQueue<>();
 
         start();
     }
 
-    public void submit(Order order) {
-        queue.offer(order);
+    public void submit(OrderEvent event) {
+        queue.offer(event);
+    }
+
+    public MatchingEngine getMatchingEngine() {
+        return matchingEngine;
     }
 
     private void start() {
         Thread thread = new Thread(() -> {
             while (true) {
                 try {
-                    Order order = queue.take();
-                    List<Trade> trades = matchingEngine.process(order);
-                    publishTrades(trades);
+                    OrderEvent event = queue.take();
+
+                    if (event.getAction() == OrderAction.CANCEL) {
+                        matchingEngine.cancelOrder(event.getOrderId(), orderStatusTracker);
+                    } else {
+                        Order order = new Order(
+                                event.getOrderId(),
+                                event.getSymbol(),
+                                event.getSide(),
+                                event.getType(),
+                                event.getPrice(),
+                                event.getQuantity(),
+                                event.getTimestamp()
+                        );
+                        List<Trade> trades = matchingEngine.process(order, orderStatusTracker);
+                        publishTrades(trades);
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

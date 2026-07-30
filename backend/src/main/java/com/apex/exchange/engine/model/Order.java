@@ -7,7 +7,10 @@ public class Order {
     private final OrderSide side;
     private final OrderType type;
     private final double price;
-    private long quantity;
+    private final long initialQuantity;
+    private long quantity; // remaining quantity
+    private long executedQuantity;
+    private OrderStatus status;
     private final long timestamp;
 
     public Order(String orderId,
@@ -22,7 +25,10 @@ public class Order {
         this.side = side;
         this.type = type != null ? type : OrderType.LIMIT;
         this.price = price;
+        this.initialQuantity = quantity;
         this.quantity = quantity;
+        this.executedQuantity = 0;
+        this.status = OrderStatus.NEW;
         this.timestamp = timestamp;
     }
 
@@ -37,6 +43,17 @@ public class Order {
 
     public void reduceQuantity(long qty) {
         this.quantity -= qty;
+        this.executedQuantity += qty;
+        if (this.quantity == 0) {
+            this.status = OrderStatus.FILLED;
+        } else {
+            this.status = OrderStatus.PARTIALLY_FILLED;
+        }
+    }
+
+    public void cancel() {
+        this.quantity = 0;
+        this.status = OrderStatus.CANCELLED;
     }
 
     public String getOrderId() { return orderId; }
@@ -44,6 +61,10 @@ public class Order {
     public OrderSide getSide() { return side; }
     public OrderType getType() { return type; }
     public double getPrice() { return price; }
+    public long getInitialQuantity() { return initialQuantity; }
     public long getQuantity() { return quantity; }
+    public long getExecutedQuantity() { return executedQuantity; }
+    public OrderStatus getStatus() { return status; }
+    public void setStatus(OrderStatus status) { this.status = status; }
     public long getTimestamp() { return timestamp; }
 }
