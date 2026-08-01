@@ -357,7 +357,7 @@ Phase 3
 - Trade history
 - Order cancellation
 
-Phase 4
+Phase 4 (Completed)
 - Snapshots
 - Recovery
 - Persistence
