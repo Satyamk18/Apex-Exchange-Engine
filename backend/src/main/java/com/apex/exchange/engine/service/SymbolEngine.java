@@ -2,6 +2,7 @@ package com.apex.exchange.engine.service;
 
 import com.apex.exchange.engine.model.*;
 import com.apex.exchange.engine.snapshot.SnapshotService;
+import com.apex.exchange.engine.websocket.MarketDataBroadcaster;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -17,6 +18,7 @@ public class SymbolEngine {
     private final TradePublisher tradePublisher;
     private final OrderStatusTracker orderStatusTracker;
     private final SnapshotService snapshotService;
+    private final MarketDataBroadcaster marketDataBroadcaster;
     private final BlockingQueue<OrderEvent> queue;
     private final AtomicLong processedCount = new AtomicLong(0);
 
@@ -24,12 +26,14 @@ public class SymbolEngine {
                         MatchingEngine matchingEngine,
                         TradePublisher tradePublisher,
                         OrderStatusTracker orderStatusTracker,
-                        SnapshotService snapshotService) {
+                        SnapshotService snapshotService,
+                        MarketDataBroadcaster marketDataBroadcaster) {
         this.symbol = symbol;
         this.matchingEngine = matchingEngine;
         this.tradePublisher = tradePublisher;
         this.orderStatusTracker = orderStatusTracker;
         this.snapshotService = snapshotService;
+        this.marketDataBroadcaster = marketDataBroadcaster;
         this.queue = new LinkedBlockingQueue<>();
 
         start();
@@ -63,6 +67,12 @@ public class SymbolEngine {
                         );
                         List<Trade> trades = matchingEngine.process(order, orderStatusTracker);
                         publishTrades(trades);
+                    }
+
+                    // Broadcast real-time L2 order book depth update via WebSocket if broadcaster is present
+                    if (marketDataBroadcaster != null) {
+                        OrderBookDepthDto depthDto = matchingEngine.getOrderBook().getDepth(symbol, 10);
+                        marketDataBroadcaster.broadcastDepth(depthDto);
                     }
 
                     // Periodic snapshot after every SNAPSHOT_INTERVAL operations
