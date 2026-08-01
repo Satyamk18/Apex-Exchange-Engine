@@ -1,6 +1,7 @@
 package com.apex.exchange.engine.service;
 
 import com.apex.exchange.engine.model.*;
+import com.apex.exchange.engine.snapshot.SnapshotService;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -13,18 +14,18 @@ public class MatchingEngineManager {
     private final ConcurrentHashMap<String, SymbolEngine> engines = new ConcurrentHashMap<>();
     private final TradePublisher tradePublisher;
     private final OrderStatusTracker orderStatusTracker;
+    private final SnapshotService snapshotService;
 
-    public MatchingEngineManager(TradePublisher tradePublisher, OrderStatusTracker orderStatusTracker) {
+    public MatchingEngineManager(TradePublisher tradePublisher,
+                                 OrderStatusTracker orderStatusTracker,
+                                 SnapshotService snapshotService) {
         this.tradePublisher = tradePublisher;
         this.orderStatusTracker = orderStatusTracker;
+        this.snapshotService = snapshotService;
     }
 
     public void processEvent(OrderEvent event) {
-        engines
-                .computeIfAbsent(event.getSymbol(), symbol ->
-                        new SymbolEngine(symbol, new MatchingEngine(), tradePublisher, orderStatusTracker)
-                )
-                .submit(event);
+        getOrCreateSymbolEngine(event.getSymbol()).submit(event);
     }
 
     public void submitOrder(Order order) {
@@ -41,6 +42,14 @@ public class MatchingEngineManager {
         processEvent(event);
     }
 
+    /**
+     * Returns the MatchingEngine for a given symbol, creating a new SymbolEngine if necessary.
+     * Used by EngineRecoveryService to restore order book state before accepting live traffic.
+     */
+    public MatchingEngine getOrCreateEngine(String symbol) {
+        return getOrCreateSymbolEngine(symbol).getMatchingEngine();
+    }
+
     public OrderBookDepthDto getOrderBookDepth(String symbol, int depth) {
         SymbolEngine symbolEngine = engines.get(symbol);
         if (symbolEngine == null) {
@@ -51,5 +60,11 @@ public class MatchingEngineManager {
 
     public Collection<SymbolEngine> getAllEngines() {
         return engines.values();
+    }
+
+    private SymbolEngine getOrCreateSymbolEngine(String symbol) {
+        return engines.computeIfAbsent(symbol, s ->
+                new SymbolEngine(s, new MatchingEngine(), tradePublisher, orderStatusTracker, snapshotService)
+        );
     }
 }

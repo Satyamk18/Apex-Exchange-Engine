@@ -1,5 +1,8 @@
 package com.apex.exchange.engine.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class Order {
 
     private final String orderId;
@@ -13,13 +16,14 @@ public class Order {
     private OrderStatus status;
     private final long timestamp;
 
-    public Order(String orderId,
-                 String symbol,
-                 OrderSide side,
-                 OrderType type,
-                 double price,
-                 long quantity,
-                 long timestamp) {
+    @JsonCreator
+    public Order(@JsonProperty("orderId") String orderId,
+                 @JsonProperty("symbol") String symbol,
+                 @JsonProperty("side") OrderSide side,
+                 @JsonProperty("type") OrderType type,
+                 @JsonProperty("price") double price,
+                 @JsonProperty("quantity") long quantity,
+                 @JsonProperty("timestamp") long timestamp) {
         this.orderId = orderId;
         this.symbol = symbol;
         this.side = side;
