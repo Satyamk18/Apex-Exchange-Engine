@@ -17,12 +17,13 @@ Every architectural decision should prioritize long-term maintainability, correc
 The project aims to:
 
 - Build a deterministic order matching engine
-- Handle concurrent order ingestion safely
-- Process trades with low latency
-- Demonstrate event-driven architecture
+- Handle concurrent order ingestion safely via Kafka
+- Process trades with low latency using symbol-partitioned worker threads
+- Demonstrate event-driven architecture and market data streaming
 - Scale horizontally by symbol
-- Showcase production-quality engineering practices
-- Serve as a portfolio project that reflects real-world backend system design
+- Provide state durability via automated order book snapshots and recovery
+- Stream real-time market data (L2 Depth, Trade feed, Rolling Tickers) via WebSockets
+- Showcase production-quality engineering practices and portfolio-ready backend system design
 
 ---
 
@@ -32,13 +33,12 @@ This project intentionally does not aim to replicate an entire stock exchange.
 
 The following are currently out of scope:
 
-- Market data dissemination
-- FIX protocol
-- Authentication and authorization
-- User management
-- Risk management
-- Regulatory compliance
-- Trading UI
+- Institutional FIX / ITCH protocol adapters (standard REST and WebSockets are used)
+- User authentication and authorization
+- User account balances and portfolio management
+- Risk management & margin checks
+- Regulatory compliance and audit trail generation
+- Web Trading UI Dashboard (backend API & WebSocket feeds are provided)
 
 These may be explored in future iterations.
 
@@ -50,7 +50,13 @@ Language
 - Java 17
 
 Backend
-- Spring Boot
+- Spring Boot 3.x
+- Spring WebSocket (STOMP / SockJS)
+- Spring Data JPA
+
+Database & Persistence
+- PostgreSQL / H2
+- JSON Order Book Snapshots
 
 Messaging
 - Apache Kafka
@@ -59,57 +65,71 @@ Build Tool
 - Maven
 
 Infrastructure
-- Docker Compose
+- Docker Compose (Zookeeper, Kafka, PostgreSQL)
 
-Monitoring
+Monitoring & Benchmarking
 - Spring Actuator
 - Micrometer
+- Custom Multithreaded Load Test Suite (`load-test` profile)
 
 ---
 
 # Current Architecture
 
-Current request flow:
+Current end-to-end request flow:
 
-Client
-
-↓
-
-REST Controller
-
-↓
-
-Kafka Producer
-
-↓
-
-Kafka Topic
-
-↓
-
-Kafka Consumer
-
-↓
-
+```
+Client (REST / HTTP)
+       │
+       ▼
+OrderController
+       │
+       ▼
+OrderProducer
+       │
+       ▼
+Kafka Topic ("orders")
+       │
+       ▼
+OrderConsumer
+       │
+       ▼
 MatchingEngineManager
+       │
+       ▼
+SymbolEngine (Dedicated Thread & Queue per Symbol)
+       │
+       ├─────────────────────────────────┐
+       ▼                                 ▼
+MatchingEngine                     MarketDataBroadcaster (L2 Depth Updates)
+       │                                 │
+       ▼                                 ▼
+Trade Execution                   WebSocket STOMP (/topic/depth/{symbol})
+       │
+       ▼
+TradeProducer
+       │
+       ▼
+Kafka Topic ("trades")
+       │
+       ▼
+TradeConsumer
+       ├───► PersistenceService (Asynchronous DB Persistence)
+       │
+       └───► MarketDataBroadcaster 
+                  ├───► WebSocket STOMP (/topic/trades/{symbol})
+                  └───► WebSocket STOMP (/topic/ticker/{symbol})
+```
 
-↓
+State Durability & Recovery flow:
 
-SymbolEngine
+```
+SymbolEngine (every N operations) ──► SnapshotService ──► File System (.snapshots/{symbol}.snapshot.json)
+                                                                 │
+Startup (ApplicationReadyEvent) ◄── EngineRecoveryService ◄──────┘
+```
 
-↓
-
-MatchingEngine
-
-↓
-
-Trade Event
-
-↓
-
-Kafka Trade Topic
-
-The architecture is intentionally event-driven to separate request handling from business processing.
+The architecture is intentionally event-driven to separate request handling, matching engine state mutation, persistence, and market data broadcasting.
 
 ---
 
@@ -117,76 +137,119 @@ The architecture is intentionally event-driven to separate request handling from
 
 ## OrderController
 
-Receives client requests.
-
-Responsible only for validation and publishing orders.
-
-Contains no business logic.
-
----
-
-## OrderProducer
-
-Publishes validated orders to Kafka.
+Receives REST requests from trading clients.
+- `POST /orders`: Validates limit/market order requests and publishes `CREATE` order events to Kafka.
+- `DELETE /orders/{symbol}/{orderId}`: Publishes `CANCEL` order events to Kafka.
+- `GET /orders/{orderId}`: Queries current order lifecycle status from `OrderStatusTracker`.
+- `GET /orders/book/{symbol}`: Returns a REST snapshot of Level 2 order book depth up to specified depth limit.
 
 ---
 
-## OrderConsumer
+## HistoryController
 
-Consumes orders from Kafka.
+Provides historical queries over persisted database records.
+- `GET /history/trades/{symbol}`: Retrieves all executed trades for a symbol.
+- `GET /history/trades/order/{orderId}`: Retrieves trades associated with a specific order ID.
+- `GET /history/orders/{symbol}`: Retrieves historical order records for a symbol.
+- `GET /history/orders/{symbol}/{orderId}`: Retrieves specific historical order detail by ID.
 
-Routes each order to the appropriate SymbolEngine.
+---
+
+## OrderProducer & OrderConsumer
+
+- **OrderProducer**: Publishes validated `OrderEvent` objects (`CREATE`, `CANCEL`) to the configured Kafka orders topic.
+- **OrderConsumer**: Listens to the Kafka orders topic and routes events to `MatchingEngineManager`.
+
+---
+
+## TradeProducer & TradeConsumer
+
+- **TradeProducer**: Publishes executed `Trade` results generated by matching engine to the Kafka trades topic.
+- **TradeConsumer**: Listens to the Kafka trades topic and triggers:
+  1. Asynchronous DB persistence via `PersistenceService`.
+  2. Live trade execution and 24h rolling ticker updates via `MarketDataBroadcaster`.
 
 ---
 
 ## MatchingEngineManager
 
-Maintains a registry of SymbolEngines.
-
-Ensures one matching engine exists per trading symbol.
+Maintains a thread-safe registry of `SymbolEngine` instances.
+- Ensures exactly one dedicated `SymbolEngine` exists per trading symbol.
+- Serves as the primary entry point for routing incoming `OrderEvent` commands.
 
 ---
 
 ## SymbolEngine
 
 Owns:
+- `MatchingEngine`
+- `LinkedBlockingQueue` order queue
+- Dedicated single worker thread (`engine-{symbol}`)
+- Operation counter for periodic snapshot triggers
 
-- MatchingEngine
-- BlockingQueue
-- Dedicated processing thread
-
-Guarantees sequential processing for a single symbol while allowing parallel processing across multiple symbols.
+Guarantees sequential processing for a single symbol while enabling parallel execution across distinct symbols.
+Triggers live L2 order book depth WebSocket broadcasts upon every state update and triggers automated snapshots every 1,000 operations.
 
 ---
 
-## MatchingEngine
+## MatchingEngine & OrderBook
 
-Contains all order matching logic.
+Contains pure, framework-independent order matching logic.
+- Maintains `OrderBook` with `PriorityQueue` price-time priority structures for Bids (descending price) and Asks (ascending price).
+- Processes `LIMIT` and `MARKET` orders for `BUY` and `SELL` sides.
+- Supports order cancellations and produces `Trade` execution records.
+- Generates real-time Level 2 (L2) price aggregated order book depth DTOs (`OrderBookDepthDto`).
 
-Responsible for:
+---
 
-- Buy book
-- Sell book
-- Price-time priority
-- Trade generation
+## OrderStatusTracker
 
-Should remain independent of Spring Boot and Kafka.
+In-memory thread-safe service tracking order lifecycle states (`PENDING`, `PARTIALLY_FILLED`, `FILLED`, `CANCELLED`).
+Updated dynamically during order placement, partial/full trade executions, and cancellations.
+
+---
+
+## PersistenceService & Repositories
+
+- **PersistenceService**: Manages JPA transactions to persist `OrderEntity` and `TradeEntity` instances to PostgreSQL/database asynchronously.
+- **OrderRepository & TradeRepository**: Spring Data JPA repositories enabling rich query interfaces for trade and order history.
+
+---
+
+## MarketDataBroadcaster & WebSocketConfig
+
+- **WebSocketConfig**: Configures Spring STOMP messaging broker over `/topic` (public market feeds) and `/queue` (private feeds) at `/ws-exchange` endpoint (supporting native WebSockets and SockJS fallback).
+- **MarketDataBroadcaster**: Real-time broadcasting service managing:
+  - `/topic/depth/{symbol}`: Live Level 2 order book top-N bids and asks depth.
+  - `/topic/trades/{symbol}`: Live trade execution notifications.
+  - `/topic/ticker/{symbol}`: Live 24-hour rolling ticker updates (last price, high, low, total volume).
+
+---
+
+## SnapshotService & EngineRecoveryService
+
+- **SnapshotService**: Serializes active symbol order books (`OrderBookSnapshot`) to JSON files in `.snapshots/`.
+- **EngineRecoveryService**: Listens to Spring Boot `ApplicationReadyEvent` during application startup, automatically discovering saved snapshot files and re-hydrating order books and `OrderStatusTracker` state before live traffic begins.
+
+---
+
+## LoadTestRunner
+
+Benchmark runner component enabled under `@Profile("load-test")`.
+Executes concurrent multithreaded order generator threads against `MatchingEngineManager` to calculate order processing throughput (orders/sec) and verify engine stability under load.
 
 ---
 
 # Current Concurrency Model
 
-Concurrency is partitioned by trading symbol.
+Concurrency is strictly partitioned by trading symbol.
 
 Each symbol owns:
+- Dedicated worker thread (`engine-{symbol}`)
+- Dedicated queue (`LinkedBlockingQueue`)
+- Dedicated matching engine (`MatchingEngine`)
 
-- Dedicated worker thread
-- Dedicated queue
-- Dedicated matching engine
-
-This eliminates synchronization inside the matching engine while allowing multiple symbols to execute simultaneously.
-
-Future improvements may include more advanced scheduling or partition assignment strategies.
+This eliminates lock contention inside the matching engine while allowing multiple distinct symbols to execute concurrently without interference.
 
 ---
 
@@ -198,184 +261,64 @@ The project follows these architectural principles:
 - Single Responsibility Principle
 - Composition over Inheritance
 - Dependency Injection
-- Framework-independent business logic
-- High cohesion
-- Low coupling
+- Framework-independent business logic in core domain (`MatchingEngine`, `OrderBook`)
+- High cohesion and low coupling
 
-The domain model should never depend directly on infrastructure concerns.
+The domain matching engine model never depends directly on Spring Boot or Kafka infrastructure concerns.
 
 ---
 
 # Engineering Expectations
 
-Every implementation should optimize for:
+Every implementation optimizes for:
 
-- Correctness
-- Readability
-- Maintainability
-- Testability
-- Reliability
-- Scalability
-- Performance
-- Extensibility
-
-Working code is not sufficient.
-
-Solutions should be evaluated from an engineering perspective.
-
----
-
-# Performance Philosophy
-
-Performance should be achieved through good design rather than premature optimization.
-
-When multiple implementations exist, prefer solutions that:
-
-- Reduce unnecessary allocations
-- Minimize lock contention
-- Reduce algorithmic complexity
-- Improve throughput
-- Maintain deterministic behavior
-
-Every optimization should preserve readability and correctness.
-
----
-
-# Concurrency Philosophy
-
-Concurrency should remain explicit and easy to reason about.
-
-Prefer:
-
-- Message passing
-- Immutable objects where practical
-- Dedicated ownership of mutable state
-
-Avoid:
-
-- Shared mutable state
-- Global synchronization
-- Hidden concurrency
-
-Thread safety should be maintained by design rather than by excessive locking.
-
----
-
-# Engineering Mindset
-
-Think like a backend engineer building software that may eventually process millions of events.
-
-Every design decision should consider:
-
-- Can this scale?
-
-- Is this maintainable?
-
-- Can another engineer understand this?
-
-- What happens during failure?
-
-- Can this component evolve independently?
-
-Trade-offs should always be explained before implementation.
-
----
-
-# AI Collaboration Guidelines
-
-Before implementing any feature:
-
-1. Understand the current architecture.
-
-2. Explain the proposed design.
-
-3. Identify affected components.
-
-4. Explain trade-offs.
-
-5. Preserve architectural consistency.
-
-After implementation:
-
-- Review the code.
-- Check thread safety.
-- Look for performance improvements.
-- Identify edge cases.
-- Suggest possible refactorings.
-
-Do not introduce unnecessary abstractions.
-
-Do not over-engineer.
-
-Prefer incremental improvements over large rewrites.
-
----
-
-# Code Review Checklist
-
-Every completed feature should satisfy the following:
-
-✓ Correctness
-
-✓ Readability
-
-✓ Maintainability
-
-✓ Thread Safety
-
-✓ Performance
-
-✓ No duplicate logic
-
-✓ Appropriate abstractions
-
-✓ Meaningful naming
-
-✓ Error handling
-
-✓ Logging where appropriate
-
-✓ Build passes
+- Correctness & Determinism
+- Readability & Maintainability
+- Thread Safety by Design
+- Testability (Unit & Integration tests)
+- Low-latency event processing
 
 ---
 
 # Current Roadmap
 
-Phase 1
-- Order matching
-- Buy/Sell books
-- Market orders
-- Limit orders
+Phase 1 (Completed)
+- Order matching engine core
+- Buy/Sell order books (Price-Time priority)
+- Market & Limit orders
+- Level 2 depth aggregation
 
-Phase 2
-- Kafka integration
-- Symbol partitioning
-- Concurrent processing
+Phase 2 (Completed)
+- Kafka integration for order ingestion
+- Symbol partitioning architecture
+- Concurrent in-memory symbol engines
 
-Phase 3
-- Trade publishing
-- Trade history
-- Order cancellation
+Phase 3 (Completed)
+- Kafka trade publishing
+- Asynchronous database persistence (Orders & Trades)
+- Order cancellation support
+- In-memory order status tracker & REST history API
 
 Phase 4 (Completed)
-- Snapshots
-- Recovery
-- Persistence
+- Automated JSON order book snapshots
+- Engine recovery on startup (`ApplicationReadyEvent`)
+- Durability and state recovery testing
 
-Phase 5
-- WebSocket streaming
-- Market data
-- Horizontal scaling
+Phase 5 (Completed)
+- WebSocket STOMP integration (`WebSocketConfig`)
+- Live trade execution stream (`/topic/trades/{symbol}`)
+- Rolling 24-hour ticker statistics stream (`/topic/ticker/{symbol}`)
+- Live L2 order book depth stream (`/topic/depth/{symbol}`)
 
-Phase 6
-- Distributed deployment
-- Performance benchmarking
-- Production hardening
+Phase 6 (In Progress / Next Steps)
+- Horizontal cluster scaling across multiple engine nodes
+- Distributed partition assignment & failover management
+- Zero-allocation memory optimizations (e.g. primitive arrays / Agrona ring buffers)
+- End-to-end latency profiling & Grafana dashboard integration
+- Optional Web Trading UI dashboard frontend
 
 ---
 
 # Future Vision
 
 The long-term objective is to evolve Apex Exchange Engine into a production-inspired distributed trading platform that demonstrates modern backend engineering practices, distributed systems design, and low-latency architecture.
-
-The project should emphasize engineering quality over feature quantity and remain a reference implementation for scalable event-driven backend systems.
