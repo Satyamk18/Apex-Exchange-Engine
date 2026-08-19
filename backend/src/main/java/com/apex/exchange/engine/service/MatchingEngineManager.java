@@ -1,8 +1,10 @@
 package com.apex.exchange.engine.service;
 
+import com.apex.exchange.engine.metrics.EngineLatencyMetrics;
 import com.apex.exchange.engine.model.*;
 import com.apex.exchange.engine.snapshot.SnapshotService;
 import com.apex.exchange.engine.websocket.MarketDataBroadcaster;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -17,15 +19,26 @@ public class MatchingEngineManager {
     private final OrderStatusTracker orderStatusTracker;
     private final SnapshotService snapshotService;
     private final MarketDataBroadcaster marketDataBroadcaster;
+    private final EngineLatencyMetrics engineLatencyMetrics;
 
     public MatchingEngineManager(TradePublisher tradePublisher,
                                  OrderStatusTracker orderStatusTracker,
                                  SnapshotService snapshotService,
                                  MarketDataBroadcaster marketDataBroadcaster) {
+        this(tradePublisher, orderStatusTracker, snapshotService, marketDataBroadcaster, null);
+    }
+
+    @Autowired
+    public MatchingEngineManager(TradePublisher tradePublisher,
+                                 OrderStatusTracker orderStatusTracker,
+                                 SnapshotService snapshotService,
+                                 MarketDataBroadcaster marketDataBroadcaster,
+                                 EngineLatencyMetrics engineLatencyMetrics) {
         this.tradePublisher = tradePublisher;
         this.orderStatusTracker = orderStatusTracker;
         this.snapshotService = snapshotService;
         this.marketDataBroadcaster = marketDataBroadcaster;
+        this.engineLatencyMetrics = engineLatencyMetrics;
     }
 
     public void processEvent(OrderEvent event) {
@@ -68,7 +81,7 @@ public class MatchingEngineManager {
 
     private SymbolEngine getOrCreateSymbolEngine(String symbol) {
         return engines.computeIfAbsent(symbol, s ->
-                new SymbolEngine(s, new MatchingEngine(), tradePublisher, orderStatusTracker, snapshotService, marketDataBroadcaster)
+                new SymbolEngine(s, new MatchingEngine(), tradePublisher, orderStatusTracker, snapshotService, marketDataBroadcaster, engineLatencyMetrics)
         );
     }
 }
