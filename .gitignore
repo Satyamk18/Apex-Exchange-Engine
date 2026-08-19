@@ -1,4 +1,18 @@
+### Maven / Build Outputs ###
+target/
+**/target/
+*.class
+*.jar
+*.war
+
+### Database & State Storage ###
+backend/data/
+*.db
+.snapshots/
+
 ### IntelliJ IDEA ###
+.idea/
+*.iml
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
@@ -23,8 +37,6 @@ bin/
 /nbdist/
 /.nb-gradle/
 
-### VS Code ###
+### VS Code & Editors ###
 .vscode/
-
-### Mac OS ###
 .DS_Store

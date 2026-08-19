@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "apex-exchange-tools": {
+      "command": "node",
+      "args": [],
+      "env": {},
+      "disabled": true,
+      "comment": "Model Context Protocol server configuration template for Apex Exchange Engine integrations."
+    }
+  }
+}
