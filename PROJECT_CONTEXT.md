@@ -97,7 +97,7 @@ OrderConsumer
 MatchingEngineManager
        │
        ▼
-SymbolEngine (Dedicated Thread & Queue per Symbol)
+SymbolEngine (LMAX Disruptor Ring Buffer per Symbol)
        │
        ├─────────────────────────────────┐
        ▼                                 ▼
@@ -183,11 +183,12 @@ Maintains a thread-safe registry of `SymbolEngine` instances.
 
 Owns:
 - `MatchingEngine`
-- `LinkedBlockingQueue` order queue
-- Dedicated single worker thread (`engine-{symbol}`)
+- LMAX Disruptor `RingBuffer<OrderEventHolder>` (16,384 pre-allocated slots, `YieldingWaitStrategy`, `ProducerType.MULTI`)
+- Dedicated daemon worker thread per symbol
 - Operation counter for periodic snapshot triggers
+- `EngineLatencyMetrics` telemetry recording
 
-Guarantees sequential processing for a single symbol while enabling parallel execution across distinct symbols.
+Guarantees sequential, lock-free processing for a single symbol while enabling parallel execution across distinct symbols.
 Triggers live L2 order book depth WebSocket broadcasts upon every state update and triggers automated snapshots every 1,000 operations.
 
 ---
@@ -233,10 +234,14 @@ Updated dynamically during order placement, partial/full trade executions, and c
 
 ---
 
-## LoadTestRunner
+## Load Testing & Latency Telemetry
 
-Benchmark runner component enabled under `@Profile("load-test")`.
-Executes concurrent multithreaded order generator threads against `MatchingEngineManager` to calculate order processing throughput (orders/sec) and verify engine stability under load.
+- **LoadTestRunner**: Benchmark runner component enabled under `@Profile("load-test")` executing multi-threaded order generation against `MatchingEngineManager`.
+- **LoadTestController & LoadTestService**: REST endpoints (`POST /load-test/run`, `GET /load-test/results`) enabling on-demand multithreaded benchmarking without restarting the server.
+- **EngineLatencyMetrics**: Micrometer instrumentation capturing:
+  - `matching.engine.order.latency` (end-to-end ingestion-to-execution latency percentiles: p50, p95, p99).
+  - `matching.engine.symbol.processing.time` (pure in-memory matching duration percentiles).
+  - `loadtest.throughput.ops_per_sec` & `loadtest.duration.seconds` (dynamic gauge telemetry).
 
 ---
 
@@ -245,8 +250,8 @@ Executes concurrent multithreaded order generator threads against `MatchingEngin
 Concurrency is strictly partitioned by trading symbol.
 
 Each symbol owns:
-- Dedicated worker thread (`engine-{symbol}`)
-- Dedicated queue (`LinkedBlockingQueue`)
+- Dedicated worker daemon thread managed by LMAX Disruptor
+- Dedicated lock-free ring buffer (`RingBuffer<OrderEventHolder>`)
 - Dedicated matching engine (`MatchingEngine`)
 
 This eliminates lock contention inside the matching engine while allowing multiple distinct symbols to execute concurrently without interference.
@@ -310,12 +315,13 @@ Phase 5 (Completed)
 - Rolling 24-hour ticker statistics stream (`/topic/ticker/{symbol}`)
 - Live L2 order book depth stream (`/topic/depth/{symbol}`)
 
-Phase 6 (In Progress / Next Steps)
-- Horizontal cluster scaling across multiple engine nodes
-- Distributed partition assignment & failover management
-- Zero-allocation memory optimizations (e.g. primitive arrays / Agrona ring buffers)
-- End-to-end latency profiling & Grafana dashboard integration
-- Optional Web Trading UI dashboard frontend
+Phase 6 (In Progress)
+- [Completed] LMAX Disruptor Ring Buffer integration in SymbolEngine (16,384 slots, lock-free, zero-allocation event recycling)
+- [Completed] Micrometer latency percentile telemetry (`EngineLatencyMetrics`) & on-demand REST benchmark runner (`LoadTestController`)
+- [Next] Zero-allocation memory optimizations in OrderBook (primitive arrays / Agrona collections / object pools)
+- [Next] Prometheus scrape exporter & Grafana latency dashboard
+- [Upcoming] Horizontal cluster scaling across multiple engine nodes & distributed partition assignment
+- [Upcoming] Optional Web Trading UI dashboard frontend
 
 ---
 

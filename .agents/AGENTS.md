@@ -4,9 +4,11 @@ You are assisting a developer working on the **Apex Exchange Engine** codebase. 
 
 ## 1. Core Documentation Reference
 Before proposing code changes or beginning tasks, locate and read the following documents in the workspace:
+- **[ACTIVE_STATUS.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/ACTIVE_STATUS.md)**: Live state of the current milestone, completed features, and next tasks.
 - **[PROJECT_CONTEXT.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/PROJECT_CONTEXT.md)**: Details the overall architecture, tech stack, request flow, and core service definitions.
 - **[DEV_SETUP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/DEV_SETUP.md)**: Explains the local setup, Docker dependencies, REST API list, WebSocket STOMP subscription paths, and testing instructions.
 - **[FUTURE_ROADMAP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/FUTURE_ROADMAP.md)**: Documents future architecture phases (low-latency zero-allocation collections, pre-trade risk engine, clustered horizontal scaling, etc.).
+- **Architecture Decision Records (`docs/adr/`)**: Read prior architectural decisions before proposing modifications to core concurrency, memory allocation, or persistence layers.
 
 ## 2. Architectural Guidelines
 - **Domain Purity**: Ensure the matching logic in [MatchingEngine.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/service/MatchingEngine.java) and [OrderBook.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/core/OrderBook.java) remains independent of Spring, JPA, or Kafka framework dependencies.

@@ -45,13 +45,15 @@ This document outlines the strategic future roadmap, architectural enhancements,
 
 **Goal:** Reduce matching latency from microseconds to nanoseconds and eliminate Java Garbage Collection (GC) pauses on the hot execution path.
 
-- **Zero-Allocation Data Structures**:
+- **Ring Buffer Ingestion (LMAX Disruptor)** [COMPLETED]:
+  - Replaced `LinkedBlockingQueue` inside [SymbolEngine.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/service/SymbolEngine.java) with a 16,384-slot LMAX Disruptor ring buffer (`YieldingWaitStrategy`, `ProducerType.MULTI`, `OrderEventHolder`) to process incoming orders sequentially with zero lock contention.
+- **Detailed Latency Metric Logging & Benchmarking** [COMPLETED]:
+  - Integrated [Micrometer](https://micrometer.io/) timers in [EngineLatencyMetrics.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/metrics/EngineLatencyMetrics.java) tracking order matching latency and symbol processing time with p50, p95, and p99 percentiles.
+  - Implemented [LoadTestController.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/load/LoadTestController.java) (`POST /load-test/run`) and [LoadTestService.java](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/load/LoadTestService.java) with live throughput gauge telemetry.
+- **Zero-Allocation Data Structures** [NEXT UP]:
   - Replace standard Java collections (`PriorityQueue`, `HashMap`) in the critical matching path with primitive, cache-friendly data structures (e.g., [fastutil](https://github.com/vigna/fastutil) or [Agrona](https://github.com/real-logic/agrona) primitive maps).
   - Pre-allocate memory pools for `Order` and `Trade` objects to avoid object allocation churn on the JVM heap.
-- **Ring Buffer Ingestion (LMAX Disruptor)**:
-  - Replace the Spring Boot `LinkedBlockingQueue` inside [SymbolEngine.java](file:///c:/Users/abhis/IdeaProjects/StockExchange/backend/src/main/java/com/apex/exchange/engine/service/SymbolEngine.java) with an LMAX Disruptor ring buffer to process incoming order events sequentially with minimal thread contention.
-- **Detailed Latency Metric Logging**:
-  - Integrate [Micrometer](https://micrometer.io/) timers at each transit point (REST Ingestion → Kafka Queue → Symbol Match Engine → DB / WebSocket Broadcast).
+- **Prometheus & Grafana Export** [NEXT UP]:
   - Export metrics to Prometheus and set up a Grafana dashboard for real-time visualization of p50, p99, and p99.9 latency percentiles under load.
 
 ---
