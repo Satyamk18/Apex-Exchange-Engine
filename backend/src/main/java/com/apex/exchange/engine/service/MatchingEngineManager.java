@@ -21,19 +21,12 @@ public class MatchingEngineManager {
     private final MarketDataBroadcaster marketDataBroadcaster;
     private final EngineLatencyMetrics engineLatencyMetrics;
 
-    public MatchingEngineManager(TradePublisher tradePublisher,
-                                 OrderStatusTracker orderStatusTracker,
-                                 SnapshotService snapshotService,
-                                 MarketDataBroadcaster marketDataBroadcaster) {
-        this(tradePublisher, orderStatusTracker, snapshotService, marketDataBroadcaster, null);
-    }
-
     @Autowired
     public MatchingEngineManager(TradePublisher tradePublisher,
                                  OrderStatusTracker orderStatusTracker,
                                  SnapshotService snapshotService,
                                  MarketDataBroadcaster marketDataBroadcaster,
-                                 EngineLatencyMetrics engineLatencyMetrics) {
+                                 @Autowired(required = false) EngineLatencyMetrics engineLatencyMetrics) {
         this.tradePublisher = tradePublisher;
         this.orderStatusTracker = orderStatusTracker;
         this.snapshotService = snapshotService;

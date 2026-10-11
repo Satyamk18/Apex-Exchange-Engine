@@ -49,11 +49,6 @@ public class OrderStatusTracker {
         }
     }
 
-    public void markRejected(Order order) {
-        order.setStatus(OrderStatus.REJECTED);
-        registerOrder(order);
-    }
-
     public Optional<OrderStatusResponse> getOrderStatus(String orderId) {
         return Optional.ofNullable(orderStatuses.get(orderId));
     }

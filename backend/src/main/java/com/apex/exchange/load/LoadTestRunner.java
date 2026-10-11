@@ -1,5 +1,7 @@
 package com.apex.exchange.load;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -7,6 +9,8 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("load-test")
 public class LoadTestRunner implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(LoadTestRunner.class);
 
     private final LoadTestService loadTestService;
 
@@ -18,11 +22,11 @@ public class LoadTestRunner implements CommandLineRunner {
     public void run(String... args) throws Exception {
         LoadTestResult result = loadTestService.executeBenchmark(8, 10000);
 
-        System.out.println("=================================");
-        System.out.println("Total Orders: " + result.getTotalOrders());
-        System.out.println("Time Taken (seconds): " + result.getDurationSeconds());
-        System.out.println("Throughput (orders/sec): " + result.getThroughputOpsPerSec());
-        System.out.println("Average Latency per Order (µs): " + result.getAvgLatencyUs());
-        System.out.println("=================================");
+        log.info("=================================");
+        log.info("Total Orders: {}", result.getTotalOrders());
+        log.info("Time Taken (seconds): {}", result.getDurationSeconds());
+        log.info("Throughput (orders/sec): {}", result.getThroughputOpsPerSec());
+        log.info("Average Latency per Order (µs): {}", result.getAvgLatencyUs());
+        log.info("=================================");
     }
 }

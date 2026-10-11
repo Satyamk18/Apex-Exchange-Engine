@@ -1,10 +1,14 @@
 package com.apex.exchange.engine.service;
 
 import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class EngineShutdownManager {
+
+    private static final Logger log = LoggerFactory.getLogger(EngineShutdownManager.class);
 
     private final MatchingEngineManager manager;
 
@@ -14,6 +18,8 @@ public class EngineShutdownManager {
 
     @PreDestroy
     public void onShutdown() {
-        System.out.println("Gracefully shutting down matching engines...");
+        log.info("Gracefully shutting down matching engines...");
+        manager.getAllEngines().forEach(SymbolEngine::shutdown);
+        log.info("All matching engines shut down successfully.");
     }
 }

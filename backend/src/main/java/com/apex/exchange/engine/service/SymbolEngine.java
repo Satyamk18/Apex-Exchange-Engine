@@ -10,11 +10,15 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class SymbolEngine {
 
+    private static final Logger log = LoggerFactory.getLogger(SymbolEngine.class);
     private static final int SNAPSHOT_INTERVAL = 1000;
     private static final int RING_BUFFER_SIZE = 1024 * 16; // 16384 (Power of 2 for zero-lock bitwise masking)
 
@@ -29,15 +33,6 @@ public class SymbolEngine {
     private final Disruptor<OrderEventHolder> disruptor;
     private final RingBuffer<OrderEventHolder> ringBuffer;
     private final AtomicLong processedCount = new AtomicLong(0);
-
-    public SymbolEngine(String symbol,
-                        MatchingEngine matchingEngine,
-                        TradePublisher tradePublisher,
-                        OrderStatusTracker orderStatusTracker,
-                        SnapshotService snapshotService,
-                        MarketDataBroadcaster marketDataBroadcaster) {
-        this(symbol, matchingEngine, tradePublisher, orderStatusTracker, snapshotService, marketDataBroadcaster, null);
-    }
 
     public SymbolEngine(String symbol,
                         MatchingEngine matchingEngine,
@@ -119,7 +114,7 @@ public class SymbolEngine {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error processing order event for symbol {}: {}", symbol, e.getMessage(), e);
         } finally {
             holder.clear(); // Zero-allocation cleanup
         }

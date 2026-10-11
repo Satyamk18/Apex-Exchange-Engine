@@ -97,8 +97,4 @@ public class OrderBook {
     public PriorityQueue<Order> getSellOrders() {
         return sellBook;
     }
-
-    public Map<String, Order> getActiveOrders() {
-        return activeOrders;
-    }
 }
