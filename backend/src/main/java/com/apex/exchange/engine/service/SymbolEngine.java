@@ -2,6 +2,7 @@ package com.apex.exchange.engine.service;
 
 import com.apex.exchange.engine.metrics.EngineLatencyMetrics;
 import com.apex.exchange.engine.model.*;
+import com.apex.exchange.engine.snapshot.OrderBookSnapshot;
 import com.apex.exchange.engine.snapshot.SnapshotService;
 import com.apex.exchange.engine.websocket.MarketDataBroadcaster;
 import com.lmax.disruptor.RingBuffer;
@@ -20,6 +21,7 @@ public class SymbolEngine {
 
     private static final Logger log = LoggerFactory.getLogger(SymbolEngine.class);
     private static final int SNAPSHOT_INTERVAL = 1000;
+    private static final long DEPTH_CONFLATION_INTERVAL_MS = 50;
     private static final int RING_BUFFER_SIZE = 1024 * 16; // 16384 (Power of 2 for zero-lock bitwise masking)
 
     private final String symbol;
@@ -33,6 +35,7 @@ public class SymbolEngine {
     private final Disruptor<OrderEventHolder> disruptor;
     private final RingBuffer<OrderEventHolder> ringBuffer;
     private final AtomicLong processedCount = new AtomicLong(0);
+    private long lastDepthBroadcastTime = 0;
 
     public SymbolEngine(String symbol,
                         MatchingEngine matchingEngine,
@@ -93,16 +96,19 @@ public class SymbolEngine {
                 publishTrades(trades);
             }
 
-            // Broadcast real-time L2 order book depth update via WebSocket
-            if (marketDataBroadcaster != null) {
+            // Broadcast conflated L2 order book depth update via WebSocket on batch boundaries
+            long now = System.currentTimeMillis();
+            if (marketDataBroadcaster != null && endOfBatch && (now - lastDepthBroadcastTime >= DEPTH_CONFLATION_INTERVAL_MS)) {
                 OrderBookDepthDto depthDto = matchingEngine.getOrderBook().getDepth(symbol, 10);
                 marketDataBroadcaster.broadcastDepth(depthDto);
+                lastDepthBroadcastTime = now;
             }
 
-            // Periodic snapshot after every SNAPSHOT_INTERVAL operations
+            // Periodic snapshot after every SNAPSHOT_INTERVAL operations (offloaded asynchronously)
             long count = processedCount.incrementAndGet();
             if (count % SNAPSHOT_INTERVAL == 0 && snapshotService != null) {
-                snapshotService.saveSnapshot(symbol, matchingEngine, count);
+                OrderBookSnapshot snapshot = snapshotService.createSnapshot(symbol, matchingEngine, count);
+                snapshotService.saveSnapshotAsync(snapshot);
             }
 
             // Record latency percentiles if Micrometer metrics component is present

@@ -8,11 +8,21 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Thread-safe order lifecycle tracker with bounded memory retention for terminal orders.
+ * Prevents memory exhaustion under sustained high-throughput workloads.
+ */
 @Service
 public class OrderStatusTracker {
 
+    private static final int MAX_TERMINAL_ORDERS = 50_000;
+
     private final Map<String, OrderStatusResponse> orderStatuses = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedQueue<String> terminalOrderQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger terminalOrderCount = new AtomicInteger(0);
 
     public void registerOrder(Order order) {
         OrderStatusResponse response = new OrderStatusResponse(
@@ -28,6 +38,9 @@ public class OrderStatusTracker {
                 order.getTimestamp()
         );
         orderStatuses.put(order.getOrderId(), response);
+        if (order.getStatus() == OrderStatus.FILLED || order.getStatus() == OrderStatus.CANCELLED) {
+            trackTerminalOrder(order.getOrderId());
+        }
     }
 
     public void updateOrder(Order order) {
@@ -39,6 +52,10 @@ public class OrderStatusTracker {
         } else {
             registerOrder(order);
         }
+
+        if (order.getStatus() == OrderStatus.FILLED || order.getStatus() == OrderStatus.CANCELLED) {
+            trackTerminalOrder(order.getOrderId());
+        }
     }
 
     public void markCancelled(String orderId) {
@@ -46,10 +63,29 @@ public class OrderStatusTracker {
         if (response != null) {
             response.setRemainingQuantity(0);
             response.setStatus(OrderStatus.CANCELLED);
+            trackTerminalOrder(orderId);
         }
     }
 
     public Optional<OrderStatusResponse> getOrderStatus(String orderId) {
         return Optional.ofNullable(orderStatuses.get(orderId));
+    }
+
+    private void trackTerminalOrder(String orderId) {
+        terminalOrderQueue.offer(orderId);
+        if (terminalOrderCount.incrementAndGet() > MAX_TERMINAL_ORDERS) {
+            String oldestId = terminalOrderQueue.poll();
+            if (oldestId != null) {
+                OrderStatusResponse old = orderStatuses.get(oldestId);
+                if (old != null && (old.getStatus() == OrderStatus.FILLED || old.getStatus() == OrderStatus.CANCELLED)) {
+                    orderStatuses.remove(oldestId);
+                }
+                terminalOrderCount.decrementAndGet();
+            }
+        }
+    }
+
+    public int size() {
+        return orderStatuses.size();
     }
 }

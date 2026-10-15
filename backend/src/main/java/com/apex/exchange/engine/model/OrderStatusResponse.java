@@ -8,9 +8,9 @@ public class OrderStatusResponse {
     private OrderType type;
     private double price;
     private long initialQuantity;
-    private long executedQuantity;
-    private long remainingQuantity;
-    private OrderStatus status;
+    private volatile long executedQuantity;
+    private volatile long remainingQuantity;
+    private volatile OrderStatus status;
     private long timestamp;
 
     public OrderStatusResponse() {}

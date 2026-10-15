@@ -1,6 +1,8 @@
 package com.apex.exchange.engine.model;
 
+import com.apex.exchange.engine.core.PriceLevel;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Order {
@@ -15,6 +17,12 @@ public class Order {
     private long executedQuantity;
     private OrderStatus status;
     private final long timestamp;
+    @JsonIgnore
+    private Order prev;
+    @JsonIgnore
+    private Order next;
+    @JsonIgnore
+    private PriceLevel parentLevel;
 
     @JsonCreator
     public Order(@JsonProperty("orderId") String orderId,
@@ -48,6 +56,9 @@ public class Order {
     public void reduceQuantity(long qty) {
         this.quantity -= qty;
         this.executedQuantity += qty;
+        if (this.parentLevel != null) {
+            this.parentLevel.deductQuantity(qty);
+        }
         if (this.quantity == 0) {
             this.status = OrderStatus.FILLED;
         } else {
@@ -56,8 +67,16 @@ public class Order {
     }
 
     public void cancel() {
+        removeFromLevel();
         this.quantity = 0;
         this.status = OrderStatus.CANCELLED;
+    }
+
+    public void removeFromLevel() {
+        if (this.parentLevel != null) {
+            this.parentLevel.removeOrder(this);
+            this.parentLevel = null;
+        }
     }
 
     public String getOrderId() { return orderId; }
@@ -71,4 +90,17 @@ public class Order {
     public OrderStatus getStatus() { return status; }
     public void setStatus(OrderStatus status) { this.status = status; }
     public long getTimestamp() { return timestamp; }
+
+    @JsonIgnore
+    public Order getPrev() { return prev; }
+    @JsonIgnore
+    public void setPrev(Order prev) { this.prev = prev; }
+    @JsonIgnore
+    public Order getNext() { return next; }
+    @JsonIgnore
+    public void setNext(Order next) { this.next = next; }
+    @JsonIgnore
+    public PriceLevel getParentLevel() { return parentLevel; }
+    @JsonIgnore
+    public void setParentLevel(PriceLevel parentLevel) { this.parentLevel = parentLevel; }
 }

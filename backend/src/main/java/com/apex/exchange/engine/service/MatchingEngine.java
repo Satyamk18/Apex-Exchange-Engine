@@ -5,11 +5,11 @@ import com.apex.exchange.engine.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public class MatchingEngine {
 
     private final OrderBook orderBook = new OrderBook();
+    private long tradeSequence = 0;
 
     public List<Trade> process(Order order) {
         return process(order, null);
@@ -61,8 +61,9 @@ public class MatchingEngine {
                     tracker.updateOrder(bestSell);
                 }
 
+                String tradeId = buyOrder.getSymbol() + "-T" + (++tradeSequence);
                 trades.add(new Trade(
-                        UUID.randomUUID().toString(),
+                        tradeId,
                         buyOrder.getSymbol(),
                         tradePrice,
                         tradedQty,
@@ -118,8 +119,9 @@ public class MatchingEngine {
                     tracker.updateOrder(bestBuy);
                 }
 
+                String tradeId = sellOrder.getSymbol() + "-T" + (++tradeSequence);
                 trades.add(new Trade(
-                        UUID.randomUUID().toString(),
+                        tradeId,
                         sellOrder.getSymbol(),
                         tradePrice,
                         tradedQty,

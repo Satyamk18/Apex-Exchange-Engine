@@ -2,7 +2,7 @@
 
 > **Last Updated**: October 2026  
 > **Current Working Branch**: `main`  
-> **Build Status**: Passing (20/20 unit & integration tests)  
+> **Build Status**: Passing (29/29 unit & integration tests)  
 > **Active Roadmap Phase**: **Phase 6: Low-Latency Optimization & Performance Profiling**
 
 ---
@@ -14,9 +14,14 @@
 * [x] **Zero-Allocation Event Holder**: Implemented reusable `OrderEventHolder` with `clear()` cleanup to eliminate JVM garbage collection churn.
 * [x] **Engine Latency Telemetry**: Added [`EngineLatencyMetrics.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/metrics/EngineLatencyMetrics.java) publishing Micrometer timers for end-to-end order latency and symbol matching processing times with p50, p95, and p99 percentiles.
 * [x] **REST Load Test Suite**: Built [`LoadTestController.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/load/LoadTestController.java) (`POST /load-test/run`, `GET /load-test/results`) and [`LoadTestService.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/load/LoadTestService.java) tracking dynamic throughput gauges (`loadtest.throughput.ops_per_sec`).
+* [x] **Intrusive PriceLevel $O(1)$ OrderBook**: Refactored [`OrderBook.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/core/OrderBook.java) and created [`PriceLevel.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/core/PriceLevel.java) with intrusive doubly-linked list nodes on [`Order.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/model/Order.java), completely eliminating $O(N)$ cancellation scans.
+* [x] **Pre-Aggregated $O(\text{depth})$ Market Data & Conflation**: Streamlined `OrderBook.getDepth()` and conflated WebSocket broadcasts in `SymbolEngine` on `endOfBatch` (50ms interval), eliminating millions of redundant per-order JSON serializations.
+* [x] **Asynchronous Non-Blocking Snapshotting**: Offloaded JSON serialization and atomic file writes (`.tmp` $\to$ `.snapshot.json`) to background I/O workers in [`SnapshotService.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/snapshot/SnapshotService.java).
+* [x] **Deterministic Monotonic Trade IDs**: Replaced `UUID.randomUUID()` and OS entropy locks in [`MatchingEngine.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/service/MatchingEngine.java) with monotonic `{symbol}-T{tradeSeq}`.
+* [x] **Bounded Memory in OrderStatusTracker**: Added bounded terminal order eviction (`FILLED`/`CANCELLED`) in [`OrderStatusTracker.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/service/OrderStatusTracker.java) to eliminate JVM heap memory leaks.
 
-### ⏳ Up Next in Phase 6
-* [ ] **Zero-Allocation Collections in OrderBook**: Replace standard Java `PriorityQueue` / `HashMap` in [`OrderBook.java`](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/backend/src/main/java/com/apex/exchange/engine/core/OrderBook.java) with primitive, cache-friendly collections (e.g. Agrona or fastutil) and pre-allocated object pools for `Order` and `Trade`.
+### ⏳ Up Next
+* [ ] **Core-Pinned Engine Shards (Phase 2)**: Transition from 1-thread-per-symbol to a fixed pool of $N$ worker shards pinned to CPU cores via consistent hashing.
 * [ ] **Prometheus & Grafana Export**: Add scrape configurations and dashboard JSON templates to visualize throughput and latency percentiles under load.
 
 ---
@@ -55,8 +60,10 @@ curl.exe "http://localhost:8080/load-test/results"
 * **[DEV_SETUP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/DEV_SETUP.md)**: Local Docker, ports, and troubleshooting guide.
 * **[FUTURE_ROADMAP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/FUTURE_ROADMAP.md)**: Strategic 10-phase roadmap.
 * **[CHALLENGES_FACED_WHILE_SCALING.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/CHALLENGES_FACED_WHILE_SCALING.md)**: Deep technical audit of hot-path bottlenecks, correctness gaps, and phased scaling roadmap.
+* **[PHASE_1_IMPLEMENTATION_PLAN.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/PHASE_1_IMPLEMENTATION_PLAN.md)**: Detailed technical plan for in-memory hot-path refactoring ($O(1)$ PriceLevels, conflation, async snapshots).
 * **Architecture Decision Records**:
   * [ADR-001: Symbol-Partitioned Concurrency](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-001-symbol-partitioned-concurrency.md)
   * [ADR-002: LMAX Disruptor Ring Buffer](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-002-lmax-disruptor-ringbuffer.md)
   * [ADR-003: Asynchronous Kafka Persistence](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-003-asynchronous-kafka-persistence.md)
   * [ADR-004: Periodic Snapshots & Recovery](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-004-periodic-snapshots-and-startup-recovery.md)
+  * [ADR-005: Intrusive Doubly-Linked PriceLevel OrderBook](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-005-price-level-intrusive-orderbook.md)
