@@ -54,6 +54,7 @@ curl.exe "http://localhost:8080/load-test/results"
 * **[PROJECT_CONTEXT.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/PROJECT_CONTEXT.md)**: System architecture and tech stack overview.
 * **[DEV_SETUP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/DEV_SETUP.md)**: Local Docker, ports, and troubleshooting guide.
 * **[FUTURE_ROADMAP.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/FUTURE_ROADMAP.md)**: Strategic 10-phase roadmap.
+* **[CHALLENGES_FACED_WHILE_SCALING.md](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/CHALLENGES_FACED_WHILE_SCALING.md)**: Deep technical audit of hot-path bottlenecks, correctness gaps, and phased scaling roadmap.
 * **Architecture Decision Records**:
   * [ADR-001: Symbol-Partitioned Concurrency](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-001-symbol-partitioned-concurrency.md)
   * [ADR-002: LMAX Disruptor Ring Buffer](file:///c:/Users/satyv/Exchange-Engine/Apex-Exchange-Engine/docs/adr/ADR-002-lmax-disruptor-ringbuffer.md)
